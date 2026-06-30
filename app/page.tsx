@@ -20,8 +20,24 @@ export default function Home() {
     setResultado(null);
 
     try {
+      // Upload para o Vercel Blob
+      const uploadForm = new FormData();
+      uploadForm.append("file", arquivo);
+
+      const uploadRes = await fetch("/api/upload", {
+        method: "POST",
+        body: uploadForm,
+      });
+
+      const uploadData = await uploadRes.json();
+
+      if (!uploadRes.ok) {
+        throw new Error(uploadData.erro || "Erro ao enviar arquivo.");
+      }
+
+      // Envia apenas a URL do Blob para análise
       const formData = new FormData();
-      formData.append("arquivo", arquivo);
+      formData.append("arquivoUrl", uploadData.url);
       formData.append("usarIA", String(usarIA));
 
       const res = await fetch("/api/analyze", {
@@ -30,13 +46,6 @@ export default function Home() {
       });
 
       if (!res.ok) {
-        if (res.status === 413) {
-          setErro(
-            "O arquivo PDF é muito grande para processamento. Compacte o PDF ou utilize um arquivo menor."
-          );
-          return;
-        }
-
         const textoErro = await res.text();
 
         try {
@@ -99,21 +108,6 @@ export default function Home() {
               if (!file) return;
 
               setErro(null);
-
-              if (file.size > 4 * 1024 * 1024) {
-                setErro(
-                  "PDF maior que 4 MB. Compacte o arquivo antes de enviar para evitar falhas de upload."
-                );
-
-                setArquivo(null);
-
-                if (inputRef.current) {
-                  inputRef.current.value = "";
-                }
-
-                return;
-              }
-
               setArquivo(file);
             }}
           />
