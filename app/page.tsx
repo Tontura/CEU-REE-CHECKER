@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef } from "react";
@@ -68,3 +69,67 @@ export default function Home() {
         </h1>
 
         <p className="max-w-xl text-sm text-slate-500">
+          Envie o PDF do relatório mensal de qualquer unidade. O sistema verifica
+          datas, validades, consistência dos dados e compara automaticamente com
+          o relatório do mês anterior salvo no histórico.
+        </p>
+      </div>
+
+      <div className="w-full max-w-3xl rounded-xl border border-slate-200 bg-white p-6">
+        <label
+          htmlFor="arquivo"
+          className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 py-10 text-slate-500 hover:border-slate-400"
+        >
+          <span className="text-sm">
+            {arquivo
+              ? `Arquivo selecionado: ${arquivo.name}`
+              : "Clique para selecionar o PDF do relatório"}
+          </span>
+
+          <input
+            ref={inputRef}
+            id="arquivo"
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+
+              if (!file) return;
+
+              setErro(null);
+              setArquivo(file);
+            }}
+          />
+        </label>
+
+        <div className="mt-4 flex items-center justify-between">
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={usarIA}
+              onChange={(e) => setUsarIA(e.target.checked)}
+            />
+            Incluir análise por IA (checagens flexíveis de texto)
+          </label>
+
+          <button
+            onClick={analisar}
+            disabled={!arquivo || carregando}
+            className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-40"
+          >
+            {carregando ? "Analisando..." : "Analisar relatório"}
+          </button>
+        </div>
+
+        {erro && (
+          <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            {erro}
+          </p>
+        )}
+      </div>
+
+      {resultado && <ResultadoAnalise resultado={resultado} />}
+    </main>
+  );
+}
