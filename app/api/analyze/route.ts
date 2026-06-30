@@ -13,26 +13,17 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
 
-    const arquivoUrl = formData.get("arquivoUrl") as string | null;
+    const arquivo = formData.get("arquivo") as File | null;
     const usarIA = formData.get("usarIA") === "true";
 
-    if (!arquivoUrl) {
+    if (!arquivo) {
       return NextResponse.json(
-        { erro: "URL do arquivo não enviada." },
+        { erro: "Nenhum arquivo enviado." },
         { status: 400 }
       );
     }
 
-    const resposta = await fetch(arquivoUrl);
-
-    if (!resposta.ok) {
-      return NextResponse.json(
-        { erro: "Não foi possível baixar o PDF." },
-        { status: 400 }
-      );
-    }
-
-    const arrayBuffer = await resposta.arrayBuffer();
+    const arrayBuffer = await arquivo.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const bytes = new Uint8Array(arrayBuffer);
 
