@@ -1,8 +1,6 @@
-
 "use client";
 
 import { useState, useRef } from "react";
-import { upload } from "@vercel/blob/client";
 import { AnalysisResult } from "@/lib/types";
 import { ResultadoAnalise } from "@/components/ResultadoAnalise";
 
@@ -22,14 +20,8 @@ export default function Home() {
     setResultado(null);
 
     try {
-      const blob = await upload(arquivo.name, arquivo, {
-  access: "public",
-  handleUploadUrl: "/api/blob/upload",
-});
-
-
       const formData = new FormData();
-      formData.append("arquivoUrl", blob.url);
+      formData.append("arquivo", arquivo);
       formData.append("usarIA", String(usarIA));
 
       const res = await fetch("/api/analyze", {
@@ -38,6 +30,13 @@ export default function Home() {
       });
 
       if (!res.ok) {
+        if (res.status === 413) {
+          setErro(
+            "PDF maior que 5 MB. Compacte o arquivo antes de enviar."
+          );
+          return;
+        }
+
         const textoErro = await res.text();
 
         try {
@@ -100,6 +99,21 @@ export default function Home() {
               if (!file) return;
 
               setErro(null);
+
+              if (file.size > 5 * 1024 * 1024) {
+                setErro(
+                  "PDF maior que 5 MB. Compacte o PDF antes de enviar."
+                );
+
+                setArquivo(null);
+
+                if (inputRef.current) {
+                  inputRef.current.value = "";
+                }
+
+                return;
+              }
+
               setArquivo(file);
             }}
           />
