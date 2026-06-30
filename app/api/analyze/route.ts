@@ -1,36 +1,108 @@
-import { put } from "@vercel/blob";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { extrairTextoPdf, extrairDadosRelatorio } from "@/lib/pdfExtract";
+import { extrairFingerprintsImagens } from "@/lib/pdfImages";
+import { rodarChecagensAutomaticas } from "@/lib/rules";
+import { rodarChecagensIA } from "@/lib/claude";
+import { buscarUltimoHistorico, salvarHistorico } from "@/lib/historico";
+import { AnalysisResult, CheckItem } from "@/lib/types";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
-    const file = formData.get("file") as File | null;
 
-    if (!file) {
+    const arquivoUrl = formData.get("arquivoUrl") as string | null;
+    const usarIA = formData.get("usarIA") === "true";
+
+    if (!arquivoUrl) {
       return NextResponse.json(
-        { erro: "Arquivo não enviado" },
+        { erro: "URL do arquivo não enviada." },
         { status: 400 }
       );
     }
 
-    const blob = await put(file.name, file, {
-      access: "public",
+    const resposta = await fetch(arquivoUrl);
+
+    if (!resposta.ok) {
+      return NextResponse.json(
+        { erro: "Não foi possível baixar o PDF." },
+        { status: 400 }
+      );
+    }
+
+    const arrayBuffer = await resposta.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const bytes = new Uint8Array(arrayBuffer);
+
+    const { texto, paginas } = await extrairTextoPdf(buffer);
+    const dados = extrairDadosRelatorio(texto, paginas);
+
+    if (!dados.unidade || !dados.periodoFim) {
+      return NextResponse.json(
+        {
+          erro:
+            "Não foi possível identificar a unidade (CEU) ou o período do relatório neste PDF. Verifique se o arquivo segue o modelo padrão.",
+        },
+        { status: 422 }
+      );
+    }
+
+    const fingerprintsAtual = await extrairFingerprintsImagens(bytes);
+
+    const historicoAnterior = await buscarUltimoHistorico(
+      dados.unidade,
+      dados.periodoFim
+    );
+
+    const itensRegras = rodarChecagensAutomaticas(
+      dados,
+      fingerprintsAtual,
+      historicoAnterior
+    );
+
+    let itensIA: CheckItem[] = [];
+
+    if (usarIA) {
+      itensIA = await rodarChecagensIA(dados);
+    }
+
+    const todosItens = [...itensRegras, ...itensIA];
+
+    await salvarHistorico({
+      unidade: dados.unidade,
+      periodoFim: dados.periodoFim,
+      dados,
+      imagens: fingerprintsAtual,
+      salvoEm: new Date().toISOString(),
     });
 
-    return NextResponse.json({
-      url: blob.url,
-    });
-  } catch (error) {
-    console.error(error);
+    const resumo = {
+      ok: todosItens.filter((i) => i.status === "ok").length,
+      atencao: todosItens.filter((i) => i.status === "atencao").length,
+      desatualizado: todosItens.filter(
+        (i) => i.status === "desatualizado"
+      ).length,
+    };
+
+    const resultado: AnalysisResult = {
+      unidade: dados.unidade,
+      periodo: `${dados.periodoInicio} a ${dados.periodoFim}`,
+      itens: todosItens,
+      resumo,
+      temHistoricoAnterior: historicoAnterior !== null,
+    };
+
+    return NextResponse.json(resultado);
+  } catch (e) {
+    console.error(e);
 
     return NextResponse.json(
       {
-        erro:
-          error instanceof Error
-            ? error.message
-            : "Erro ao enviar arquivo",
+        erro: `Erro ao processar o relatório: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
       },
       { status: 500 }
     );
