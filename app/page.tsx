@@ -23,8 +23,10 @@ export default function Home() {
 
     try {
       const blob = await upload(arquivo.name, arquivo, {
-        handleUploadUrl: "/api/blob/upload",
-      });
+  access: "public",
+  handleUploadUrl: "/api/blob/upload",
+});
+
 
       const formData = new FormData();
       formData.append("arquivoUrl", blob.url);
