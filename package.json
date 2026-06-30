@@ -8,14 +8,17 @@
     "start": "next start",
     "lint": "eslint"
   },
-  "dependencies": {
-    "@upstash/redis": "^1.38.0",
-    "next": "16.2.9",
-    "pdf-parse": "^1.1.1",
-    "pdfjs-dist": "^4.0.379",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
-  },
+ 
+"dependencies": {
+  "@upstash/redis": "^1.38.0",
+  "@vercel/blob": "^1.1.1",
+  "next": "16.2.9",
+  "pdf-parse": "^1.1.1",
+  "pdfjs-dist": "^4.0.379",
+  "react": "19.2.4",
+  "react-dom": "19.2.4"
+}
+
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
