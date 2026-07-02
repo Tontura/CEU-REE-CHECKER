@@ -1,11 +1,14 @@
 import { OPS, getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
+import path from "path";
 import { ImageFingerprint } from "./types";
 
-// Aponta explicitamente para o worker no node_modules
-// (evita o erro "fake worker" quebrado em ambiente serverless/Vercel)
+// Aponta para o worker construindo o caminho em runtime
+// (require.resolve é reescrito pelo bundler e quebra em produção;
+// path.join com process.cwd() não sofre esse problema)
 if (typeof window === "undefined") {
-  GlobalWorkerOptions.workerSrc = require.resolve(
-    "pdfjs-dist/legacy/build/pdf.worker.mjs"
+  GlobalWorkerOptions.workerSrc = path.join(
+    process.cwd(),
+    "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"
   );
 }
 
