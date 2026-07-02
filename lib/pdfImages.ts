@@ -1,5 +1,13 @@
-import { OPS, getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { OPS, getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { ImageFingerprint } from "./types";
+
+// Aponta explicitamente para o worker no node_modules
+// (evita o erro "fake worker" quebrado em ambiente serverless/Vercel)
+if (typeof window === "undefined") {
+  GlobalWorkerOptions.workerSrc = require.resolve(
+    "pdfjs-dist/legacy/build/pdf.worker.mjs"
+  );
+}
 
 function calcularAverageHash(
   data: Uint8ClampedArray | Uint8Array,
@@ -9,7 +17,6 @@ function calcularAverageHash(
 ): string {
   const totalPixels = width * height;
   const grays: number[] = new Array(totalPixels);
-
   for (let p = 0; p < totalPixels; p++) {
     const offset = p * canais;
     const r = data[offset] ?? 0;
@@ -17,9 +24,7 @@ function calcularAverageHash(
     const b = data[offset + 2] ?? 0;
     grays[p] = (r + g + b) / 3;
   }
-
   const media = grays.reduce((acc, v) => acc + v, 0) / grays.length;
-
   let hash = "";
   for (let p = 0; p < grays.length; p++) {
     hash += grays[p] >= media ? "1" : "0";
@@ -44,14 +49,11 @@ export async function extrairFingerprintsImagens(
   pdfBuffer: Buffer | Uint8Array
 ): Promise<ImageFingerprint[]> {
   const fingerprints: ImageFingerprint[] = [];
-
   const loadingTask = getDocument({ data: pdfBuffer });
   const pdf = await loadingTask.promise;
-
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
     const opList = await page.getOperatorList();
-
     for (let i = 0; i < opList.fnArray.length; i++) {
       const operacao = opList.fnArray[i];
       const ehImagem =
@@ -89,7 +91,6 @@ export async function extrairFingerprintsImagens(
       }
     }
   }
-
   return fingerprints;
 }
 
@@ -106,7 +107,6 @@ export function compararFingerprints(
 ): ResultadoComparacaoFingerprints {
   let identicas = 0;
   const paginasSuspeitas: number[] = [];
-
   for (const fpAtual of atual) {
     const encontrouIgual = anterior.some(
       (fpAnterior) => similaridadeHash(fpAtual.hash, fpAnterior.hash) >= limiar
@@ -116,7 +116,6 @@ export function compararFingerprints(
       paginasSuspeitas.push(fpAtual.pagina);
     }
   }
-
   return {
     totalAtual: atual.length,
     identicas,
