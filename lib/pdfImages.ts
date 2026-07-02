@@ -1,7 +1,6 @@
 import { OPS, getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { ImageFingerprint } from "./types";
 
-// Gera um "average hash" simples a partir dos pixels da imagem
 function calcularAverageHash(
   data: Uint8ClampedArray | Uint8Array,
   width: number,
@@ -28,7 +27,19 @@ function calcularAverageHash(
   return hash;
 }
 
-// Extrai fingerprints (hashes) de todas as imagens de um PDF
+function similaridadeHash(hashA: string, hashB: string): number {
+  if (!hashA || !hashB || hashA.length !== hashB.length) {
+    return 0;
+  }
+  let diferentes = 0;
+  for (let i = 0; i < hashA.length; i++) {
+    if (hashA[i] !== hashB[i]) {
+      diferentes++;
+    }
+  }
+  return 1 - diferentes / hashA.length;
+}
+
 export async function extrairFingerprintsImagens(
   pdfBuffer: Buffer | Uint8Array
 ): Promise<ImageFingerprint[]> {
@@ -82,22 +93,33 @@ export async function extrairFingerprintsImagens(
   return fingerprints;
 }
 
-// Compara dois fingerprints via distância de Hamming
-// Retorna um valor de 0 (totalmente diferentes) a 1 (idênticos)
-export function compararFingerprints(
-  hashA: string,
-  hashB: string
-): number {
-  if (!hashA || !hashB || hashA.length !== hashB.length) {
-    return 0;
-  }
+export interface ResultadoComparacaoFingerprints {
+  totalAtual: number;
+  identicas: number;
+  paginasSuspeitas: number[];
+}
 
-  let diferentes = 0;
-  for (let i = 0; i < hashA.length; i++) {
-    if (hashA[i] !== hashB[i]) {
-      diferentes++;
+export function compararFingerprints(
+  atual: ImageFingerprint[],
+  anterior: ImageFingerprint[],
+  limiar: number = 0.9
+): ResultadoComparacaoFingerprints {
+  let identicas = 0;
+  const paginasSuspeitas: number[] = [];
+
+  for (const fpAtual of atual) {
+    const encontrouIgual = anterior.some(
+      (fpAnterior) => similaridadeHash(fpAtual.hash, fpAnterior.hash) >= limiar
+    );
+    if (encontrouIgual) {
+      identicas++;
+      paginasSuspeitas.push(fpAtual.pagina);
     }
   }
 
-  return 1 - diferentes / hashA.length;
+  return {
+    totalAtual: atual.length,
+    identicas,
+    paginasSuspeitas,
+  };
 }
