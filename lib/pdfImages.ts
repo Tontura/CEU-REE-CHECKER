@@ -1,52 +1,103 @@
-for (let i = 0; i < opList.fnArray.length; i++) {
-  const operacao = opList.fnArray[i];
+import { OPS, getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { ImageFingerprint } from "./types";
 
-  const ehImagem =
-    operacao === OPS.paintImageXObject ||
-    operacao === OPS.paintInlineImageXObject;
+// Gera um "average hash" simples a partir dos pixels da imagem
+function calcularAverageHash(
+  data: Uint8ClampedArray | Uint8Array,
+  width: number,
+  height: number,
+  canais: number
+): string {
+  const totalPixels = width * height;
+  const grays: number[] = new Array(totalPixels);
 
-  if (!ehImagem) {
-    continue;
+  for (let p = 0; p < totalPixels; p++) {
+    const offset = p * canais;
+    const r = data[offset] ?? 0;
+    const g = data[offset + 1] ?? 0;
+    const b = data[offset + 2] ?? 0;
+    grays[p] = (r + g + b) / 3;
   }
 
-  const nome = opList.argsArray[i]?.[0];
+  const media = grays.reduce((acc, v) => acc + v, 0) / grays.length;
 
-  try {
-    const img = await new Promise<any>((resolve, reject) => {
-      page.objs.get(nome, (obj: any) => resolve(obj));
+  let hash = "";
+  for (let p = 0; p < grays.length; p++) {
+    hash += grays[p] >= media ? "1" : "0";
+  }
+  return hash;
+}
 
-      setTimeout(() => {
-        reject(new Error("timeout"));
-      }, 5000);
-    });
+// Extrai fingerprints (hashes) de todas as imagens de um PDF
+export async function extrairFingerprintsImagens(
+  pdfBuffer: Buffer | Uint8Array
+): Promise<ImageFingerprint[]> {
+  const fingerprints: ImageFingerprint[] = [];
 
-    if (
-      img &&
-      img.data &&
-      img.width &&
-      img.height
-    ) {
-      const canais = Math.max(
-        3,
-        Math.round(
-          img.data.length /
-            (img.width * img.height)
-        )
-      );
+  const loadingTask = getDocument({ data: pdfBuffer });
+  const pdf = await loadingTask.promise;
 
-      const hash = calcularAverageHash(
-        img.data,
-        img.width,
-        img.height,
-        canais
-      );
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const opList = await page.getOperatorList();
 
-      fingerprints.push({
-        pagina: pageNum,
-        hash,
-      });
+    for (let i = 0; i < opList.fnArray.length; i++) {
+      const operacao = opList.fnArray[i];
+      const ehImagem =
+        operacao === OPS.paintImageXObject ||
+        operacao === OPS.paintInlineImageXObject;
+      if (!ehImagem) {
+        continue;
+      }
+      const nome = opList.argsArray[i]?.[0];
+      try {
+        const img = await new Promise<any>((resolve, reject) => {
+          page.objs.get(nome, (obj: any) => resolve(obj));
+          setTimeout(() => {
+            reject(new Error("timeout"));
+          }, 5000);
+        });
+        if (img && img.data && img.width && img.height) {
+          const canais = Math.max(
+            3,
+            Math.round(img.data.length / (img.width * img.height))
+          );
+          const hash = calcularAverageHash(
+            img.data,
+            img.width,
+            img.height,
+            canais
+          );
+          fingerprints.push({
+            pagina: pageNum,
+            hash,
+          });
+        }
+      } catch {
+        continue;
+      }
     }
-  } catch {
-    continue;
   }
+
+  return fingerprints;
+}
+
+// Compara dois fingerprints via distância de Hamming
+// Retorna um valor de 0 (totalmente diferentes) a 1 (idênticos)
+export function compararFingerprints(
+  hashA: string,
+  hashB: string
+): number {
+  if (!hashA || !hashB || hashA.length !== hashB.length) {
+    return 0;
+  }
+
+  let diferentes = 0;
+  for (let i = 0; i < hashA.length; i++) {
+    if (hashA[i] !== hashB[i]) {
+      diferentes++;
+    }
+  }
+
+  return 1 - diferentes / hashA.length;
 }
