@@ -15,59 +15,86 @@ export async function POST(req: NextRequest) {
     const arquivo = formData.get("arquivo") as File | null;
     const usarIA = formData.get("usarIA") === "true";
 
-    if (!arquivo) return NextResponse.json({ erro: "Nenhum arquivo enviado." }, { status: 400 });
+    if (!arquivo) {
+      return NextResponse.json(
+        { erro: "Nenhum arquivo enviado." },
+        { status: 400 }
+      );
+    }
 
     const arrayBuffer = await arquivo.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const bytes = new Uint8Array(arrayBuffer);
 
-    // 1. Extração para análise atual (aqui usamos tudo)
+    // Extração de texto e dados para a análise atual
     const { texto, paginas } = await extrairTextoPdf(buffer);
     const dados = extrairDadosRelatorio(texto, paginas);
 
     if (!dados.unidade || !dados.periodoFim) {
-      return NextResponse.json({ erro: "Dados do CEU não identificados." }, { status: 422 });
+      return NextResponse.json(
+        { erro: "Não foi possível identificar a unidade ou o período no PDF." },
+        { status: 422 }
+      );
     }
 
+    // Extração de fingerprints de imagens
     const fingerprintsAtual = await extrairFingerprintsImagens(bytes);
-    const historicoAnterior = await buscarUltimoHistorico(dados.unidade, dados.periodoFim);
-    const itensRegras = rodarChecagensAutomaticas(dados, fingerprintsAtual, historicoAnterior);
-    
+
+    // Busca histórico anterior para comparação
+    const historicoAnterior = await buscarUltimoHistorico(
+      dados.unidade,
+      dados.periodoFim
+    );
+
+    // Roda as checagens automáticas
+    const itensRegras = rodarChecagensAutomaticas(
+      dados,
+      fingerprintsAtual,
+      historicoAnterior
+    );
+
     let itensIA: CheckItem[] = [];
-    if (usarIA) itensIA = await rodarChecagensIA(dados);
+    if (usarIA) {
+      itensIA = await rodarChecagensIA(dados);
+    }
 
     const todosItens = [...itensRegras, ...itensIA];
 
-    // --- AQUI ESTÁ A CORREÇÃO PARA O ERRO DE TAMANHO ---
-    // Removemos o textoCompleto e limitamos o número de fingerprints salvos
-    // Guardamos apenas as primeiras 50 imagens (geralmente o suficiente para detectar fraudes)
-    const { textoCompleto, ...dadosParaSalvar } = dados;
-    const imagensReduzidas = fingerprintsAtual.slice(0, 50); 
+    // --- SALVAMENTO NO HISTÓRICO (RESOLVENDO ERRO DE 10MB) ---
+    // Removemos o textoCompleto (que tem 13MB) antes de salvar no Redis
+    // e limitamos a quantidade de imagens para economizar espaço.
+    const { textoCompleto, ...dadosParaHistorico } = dados;
+    const imagensReduzidas = fingerprintsAtual.slice(0, 50);
 
     await salvarHistorico({
       unidade: dados.unidade,
       periodoFim: dados.periodoFim,
-      dados: dadosParaSalvar, // Salva sem o texto gigante
-      imagens: imagensReduzidas, // Salva apenas as digitais das imagens principais
+      dados: dadosParaHistorico,
+      imagens: imagensReduzidas,
       salvoEm: new Date().toISOString(),
     });
-    // --------------------------------------------------
+    // --------------------------------------------------------
+
+    const resumo = {
+      ok: todosItens.filter((i) => i.status === "ok").length,
+      atencao: todosItens.filter((i) => i.status === "atencao").length,
+      desatualizado: todosItens.filter((i) => i.status === "desatualizado").length,
+    };
 
     const resultado: AnalysisResult = {
       unidade: dados.unidade,
-      periodo: `${dados.periodoInicio} a ${dados.periodoFim}`,
+      periodo: `${dados.periodoInicio || ""} a ${dados.periodoFim}`,
       itens: todosItens,
-      resumo: {
-        ok: todosItens.filter(i => i.status === "ok").length,
-        atencao: todosItens.filter(i => i.status === "atencao").length,
-        desatualizado: todosItens.filter(i => i.status === "desatualizado").length,
-      },
+      resumo,
       temHistoricoAnterior: historicoAnterior !== null,
     };
 
     return NextResponse.json(resultado);
   } catch (e) {
-    console.error(e);
-    return NextResponse.json({ erro: "Erro ao processar o relatório." }, { status: 500 });
+    console.error("Erro na API de análise:", e);
+    return NextResponse.json(
+      { erro: "Erro interno ao processar o relatório." },
+      { status: 500 }
+    );
   }
 }
