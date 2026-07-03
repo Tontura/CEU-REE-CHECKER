@@ -28,11 +28,8 @@ export async function POST(req: NextRequest) {
 
     const fingerprintsAtual = await extrairFingerprintsImagens(bytes);
     const historicoAnterior = await buscarUltimoHistorico(dados.unidade, dados.periodoFim);
-
-    // Agora rodamos apenas as regras automáticas (Fotos, Licença, etc)
     const itensRegras = rodarChecagensAutomaticas(dados, fingerprintsAtual, historicoAnterior);
 
-    // Salvamento no histórico (limpo e sem texto pesado)
     const { textoCompleto, ...dadosParaHistorico } = dados;
     await salvarHistorico({
       unidade: dados.unidade,
@@ -56,6 +53,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(resultado);
   } catch (e) {
-    return NextResponse.json({ erro: "Erro ao processar o relatório." }, { status: 500 });
+    return NextResponse.json({ erro: "Erro no processamento." }, { status: 500 });
   }
 }
