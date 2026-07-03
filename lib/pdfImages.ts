@@ -31,7 +31,7 @@ function calcularAverageHash(
 
   let hash = "";
   for (let p = 0; p < grays.length; p++) {
-    // A lógica foi separada para evitar erros de parsing do compilador
+    // Corrigido: lógica separada para evitar erro de interpretação do compilador
     const bit = grays[p] >= media ? "1" : "0";
     hash += bit;
   }
@@ -91,25 +91,4 @@ export async function extrairFingerprintsImagens(
 
 export function compararFingerprints(
   atual: ImageFingerprint[],
-  anterior: ImageFingerprint[],
-  limiar = 0.9
-) {
-  let identicas = 0;
-  const paginasSuspeitas: number[] = [];
-
-  for (const fpAtual of atual) {
-    const encontrouIgual = anterior.some(
-      (fpAnterior) => similaridadeHash(fpAtual.hash, fpAnterior.hash) >= limiar
-    );
-    if (encontrouIgual) {
-      identicas++;
-      paginasSuspeitas.push(fpAtual.pagina);
-    }
-  }
-
-  return {
-    totalAtual: atual.length,
-    identicas,
-    paginasSuspeitas: Array.from(new Set(paginasSuspeitas)),
-  };
-}
+  anterio
