@@ -5,7 +5,7 @@ import { rodarChecagensAutomaticas } from "@/lib/rules";
 import { rodarChecagensIA } from "@/lib/claude";
 import { buscarUltimoHistorico, salvarHistorico } from "@/lib/historico";
 import { AnalysisResult, CheckItem } from "@/lib/types";
-import zlib from "zlib"; // Importado para compressão
+import zlib from "zlib";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -45,25 +45,21 @@ export async function POST(req: NextRequest) {
 
     const todosItens = [...itensRegras, ...itensIA];
 
-    // --- LÓGICA DE COMPRESSÃO PARA O REDIS ---
-    // Clonamos o objeto para não afetar a resposta da API atual
-    const dadosParaHistorico = JSON.parse(JSON.stringify(dados));
-    
-    if (dadosParaHistorico.textoCompleto) {
-      // Comprime o texto gigante usando Gzip
-      const compressedBuffer = zlib.gzipSync(dadosParaHistorico.textoCompleto);
-      // Substitui o texto original por uma string identificada e codificada em base64
-      dadosParaHistorico.textoCompleto = `GZIPPED:${compressedBuffer.toString("base64")}`;
+    // --- COMPRESSÃO PARA O REDIS ---
+    // Criamos uma cópia para o histórico com o texto compactado
+    const dadosParaSalvar = { ...dados };
+    if (dadosParaSalvar.textoCompleto) {
+      const compressed = zlib.gzipSync(dadosParaSalvar.textoCompleto);
+      dadosParaSalvar.textoCompleto = `GZIPPED:${compressed.toString("base64")}`;
     }
 
     await salvarHistorico({
       unidade: dados.unidade,
       periodoFim: dados.periodoFim,
-      dados: dadosParaHistorico, // Enviando os dados comprimidos
+      dados: dadosParaSalvar,
       imagens: fingerprintsAtual,
       salvoEm: new Date().toISOString(),
     });
-    // ------------------------------------------
 
     const resumo = {
       ok: todosItens.filter((i) => i.status === "ok").length,
