@@ -1,138 +1,96 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
+import { Upload, FileText, AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import ResultadoAnalise from "@/components/ResultadoAnalise";
 import { AnalysisResult } from "@/lib/types";
-import { ResultadoAnalise } from "@/components/ResultadoAnalise";
 
 export default function Home() {
   const [arquivo, setArquivo] = useState<File | null>(null);
-  const [usarIA, setUsarIA] = useState(true);
-  const [carregando, setCarregando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
+  const [analisando, setAnalisando] = useState(false);
   const [resultado, setResultado] = useState<AnalysisResult | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [erro, setErro] = useState<string | null>(null);
 
-  async function analisar() {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setArquivo(e.target.files[0]);
+      setErro(null);
+    }
+  };
+
+  const analisarRelatorio = async () => {
     if (!arquivo) return;
-
-    setCarregando(true);
+    setAnalisando(true);
     setErro(null);
-    setResultado(null);
+    const formData = new FormData();
+    formData.append("arquivo", arquivo);
 
     try {
-      const formData = new FormData();
-      formData.append("arquivo", arquivo);
-      formData.append("usarIA", String(usarIA));
-
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        if (res.status === 413) {
-          setErro(
-            "PDF maior que 5 MB. Compacte o arquivo antes de enviar."
-          );
-          return;
-        }
-
-        const textoErro = await res.text();
-
-        try {
-          const json = JSON.parse(textoErro);
-          setErro(json.erro || "Erro ao processar o relatório.");
-        } catch {
-          setErro(textoErro || "Erro ao processar o relatório.");
-        }
-
-        return;
-      }
-
-      const data = await res.json();
-      setResultado(data as AnalysisResult);
-    } catch (e) {
-      setErro(
-        e instanceof Error
-          ? e.message
-          : "Erro inesperado ao processar o relatório."
-      );
+      const response = await fetch("/api/analyze", { method: "POST", body: formData });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.erro || "Erro na análise");
+      setResultado(data);
+    } catch (err: any) {
+      setErro(err.message);
     } finally {
-      setCarregando(false);
+      setAnalisando(false);
     }
-  }
+  };
+
+  const resetar = () => {
+    setArquivo(null);
+    setResultado(null);
+    setErro(null);
+  };
 
   return (
-    <main className="flex flex-1 flex-col items-center gap-8 bg-slate-50 px-4 py-10">
-      <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-2xl font-bold text-slate-900">
-          Checador de Relatórios de Encargos — CEUs
-        </h1>
-
-        <p className="max-w-xl text-sm text-slate-500">
-          Envie o PDF do relatório mensal de qualquer unidade. O sistema verifica
-          datas, validades, consistência dos dados e compara automaticamente com
-          o relatório do mês anterior salvo no histórico.
-        </p>
-      </div>
-
-      <div className="w-full max-w-3xl rounded-xl border border-slate-200 bg-white p-6">
-        <label
-          htmlFor="arquivo"
-          className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 py-10 text-slate-500 hover:border-slate-400"
-        >
-          <span className="text-sm">
-            {arquivo
-              ? `Arquivo selecionado: ${arquivo.name}`
-              : "Clique para selecionar o PDF do relatório"}
-          </span>
-
-          <input
-            ref={inputRef}
-            id="arquivo"
-            type="file"
-            accept="application/pdf"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-
-              if (!file) return;
-
-              setErro(null);
-
-              if (file.size > 5 * 1024 * 1024) {
-                setErro(
-                  "PDF maior que 5 MB. Compacte o PDF antes de enviar."
-                );
-
-                setArquivo(null);
-
-                if (inputRef.current) {
-                  inputRef.current.value = "";
-                }
-
-                return;
-              }
-
-              setArquivo(file);
-            }}
-          />
-        </label>
-
-        <div className="mt-4 flex items-center justify-between">
-        
-            {carregando ? "Analisando..." : "Analisar relatório"}
-          </button>
+    <main className="min-h-screen bg-gray-50 py-8 px-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-10">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">CEU Relatório Checker</h1>
+          <p className="text-gray-600">Análise automática de conformidade (Modelo REE)</p>
         </div>
 
-        {erro && (
-          <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-            {erro}
-          </p>
+        {!resultado ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-12 hover:border-blue-400 transition-colors">
+              <Upload className="w-12 h-12 text-gray-400 mb-4" />
+              <p className="text-lg font-medium text-gray-700">{arquivo ? arquivo.name : "Selecione o PDF do Relatório"}</p>
+              <input type="file" accept=".pdf" className="hidden" id="file-upload" onChange={handleFileChange} disabled={analisando} />
+              <label htmlFor="file-upload" className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg font-medium cursor-pointer hover:bg-blue-700">
+                Selecionar Arquivo
+              </label>
+            </div>
+
+            {erro && (
+              <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                <p className="text-sm text-red-700">{erro}</p>
+              </div>
+            )}
+
+            <button
+              onClick={analisarRelatorio}
+              disabled={!arquivo || analisando}
+              className={`w-full mt-8 py-3 rounded-lg font-bold text-lg flex items-center justify-center gap-2 ${!arquivo || analisando ? "bg-gray-200 text-gray-400" : "bg-green-600 text-white hover:bg-green-700"}`}
+            >
+              {analisando ? <><Loader2 className="w-5 h-5 animate-spin" /> Analisando...</> : <><FileText className="w-5 h-5" /> Iniciar Análise</>}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <button onClick={resetar} className="flex items-center gap-2 text-blue-600 font-medium hover:underline">
+              <RefreshCw className="w-4 h-4" /> Analisar outro arquivo
+            </button>
+            <ResultadoAnalise resultado={resultado} />
+          </div>
         )}
       </div>
 
-      {resultado && <ResultadoAnalise resultado={resultado} />}
+      <footer className="mt-12 text-center text-gray-400 text-sm space-y-1">
+        <p>&copy; {new Date().getFullYear()} - Sistema de Verificação CEU</p>
+        <p className="font-medium text-gray-500">Desenvolvido por Hilton Cortez</p>
+      </footer>
     </main>
   );
 }
