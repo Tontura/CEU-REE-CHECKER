@@ -10,7 +10,7 @@ export function rodarChecagensAutomaticas(
   
   const mesRelatorioNum = dados.periodoFim?.split("/")[1]; 
   const nomesMeses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-  const mesRelatorioNome = nomesMeses[parseInt(mesRelatorioNum) - 1];
+  const mesRelatorioNome = nomesMeses[parseInt(mesRelatorioNum) - 1] || "";
 
   // 1. CONTEXTO E APRESENTAÇÃO
   const temApresentacao = texto.includes("apresentação") || texto.includes("contextualização") || texto.includes("introdução");
@@ -39,7 +39,7 @@ export function rodarChecagensAutomaticas(
   itens.push({
     id: "controle_pragas",
     titulo: "Controle de Pragas",
-    status: (temDiaPragas && pragasMesOk) ? "ok" : (pragasMesOk ? "atencao" : "atencao"),
+    status: (temDiaPragas && pragasMesOk) ? "ok" : "atencao",
     detalhe: pragasMesOk 
       ? (temDiaPragas ? `Realizado em ${pragasData}.` : `Mês de ${mesRelatorioNome} identificado, mas sem o dia exato.`)
       : "Data não encontrada ou diverge do mês do relatório.",
@@ -54,7 +54,7 @@ export function rodarChecagensAutomaticas(
   itens.push({
     id: "limpeza_reservatorio",
     titulo: "Limpeza de Reservatório",
-    status: (temDiaReserva && reservaMesOk) ? "ok" : (reservaMesOk ? "atencao" : "atencao"),
+    status: (temDiaReserva && reservaMesOk) ? "ok" : "atencao",
     detalhe: reservaMesOk 
       ? (temDiaReserva ? `Realizada em ${reservaData}.` : `Mês de ${mesRelatorioNome} identificado, mas sem o dia exato.`)
       : "Data não encontrada ou diverge do mês do relatório.",
