@@ -8,8 +8,7 @@ export function rodarChecagensAutomaticas(
   const itens: CheckItem[] = [];
 
   // --- 1. FOTOS ---
-  // Se tem imagens, está bom (OK)
-  if (fingerprintsAtual.length > 0) {
+  if (fingerprintsAtual && fingerprintsAtual.length > 0) {
     itens.push({
       id: "fotos_presenca",
       label: "Fotos no relatório",
@@ -45,7 +44,7 @@ export function rodarChecagensAutomaticas(
     itens.push({
       id: "licenca_sanitaria",
       label: "Licença Sanitária",
-      status: "ok", // Colocamos como OK se ela existe como anexo
+      status: "ok",
       observacao: "Licença Sanitária citada nos anexos do relatório.",
       categoria: "Regra automática"
     });
@@ -54,12 +53,12 @@ export function rodarChecagensAutomaticas(
       id: "licenca_sanitaria",
       label: "Licença Sanitária",
       status: "atencao",
-      observacao: "Não foi possível confirmar a presença da Licença Sanitária.",
+      observacao: "Não foi possível confirmar a presença ou validade da Licença Sanitária.",
       categoria: "Regra automática"
     });
   }
 
-  // --- 3. OUTROS DADOS (Controle de Pragas, Reservatório, etc) ---
+  // --- 3. CONTROLE DE PRAGAS ---
   if (dados.dataControlePragas) {
     itens.push({
       id: "pragas",
@@ -70,6 +69,7 @@ export function rodarChecagensAutomaticas(
     });
   }
 
+  // --- 4. LIMPEZA DE RESERVATÓRIO ---
   if (dados.dataLimpezaReservatorio) {
     itens.push({
       id: "reservatorio",
