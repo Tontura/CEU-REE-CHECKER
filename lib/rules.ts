@@ -1,4 +1,4 @@
-import { CheckItem, ImageFingerprint } from "./types";
+import { CheckItem } from "./types";
 
 function parseDataBr(str: string): Date | null {
   if (!str) return null;
@@ -16,79 +16,61 @@ function parseDataBr(str: string): Date | null {
   return null;
 }
 
-export function rodarChecagensAutomaticas(dados: any, fingerprintsAtual: ImageFingerprint[], historicoAnterior: any): CheckItem[] {
+export function rodarChecagensAutomaticas(dados: any, textoBruto: string): CheckItem[] {
   const itens: CheckItem[] = [];
-  const texto = dados.textoCompleto?.toLowerCase() || "";
-  
-  // Identificação do Mês do Relatório
-  const mesRelatorioNum = dados.periodoFim?.split("/")[1]; 
-  const nomesMeses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-  const mesNomeRelatorio = nomesMeses[parseInt(mesRelatorioNum) - 1] || "";
+  const texto = textoBruto.toLowerCase();
   const dataRef = parseDataBr(dados.periodoFim) || new Date();
 
-  // 1. CONTEXTO E APRESENTAÇÃO
-  const temContexto = texto.includes("apresentação") || texto.includes("contexto") || texto.includes("introdução");
-  itens.push({
-    id: "ctx", titulo: "Contexto e Apresentação", status: temContexto ? "ok" : "atencao",
-    detalhe: temContexto ? "Introdução e contextualização identificadas." : "Falta seção de apresentação.", origem: "regra"
-  });
+  // Função para validar Pragas e Reservatórios (4 meses)
+  const validarServico = (dataStr: string | null, titulo: string, id: string) => {
+    const dataServico = parseDataBr(dataStr || "");
+    if (!dataServico) {
+      itens.push({ id, titulo, status: "atencao", detalhe: "Data não identificada no texto.", origem: "regra" });
+      return;
+    }
+    const diffMeses = (dataRef.getFullYear() - dataServico.getFullYear()) * 12 + (dataRef.getMonth() - dataServico.getMonth());
+    const estaValido = diffMeses <= 4;
+    itens.push({
+      id, titulo,
+      status: estaValido ? "ok" : "atencao",
+      detalhe: `Realizado em ${dataStr}. ${estaValido ? 'Dentro da validade quadrimestral.' : 'Vencido ou fora do prazo (limite 4 meses).' }`,
+      origem: "regra"
+    });
+  };
 
-  // 2. FOTOS
-  itens.push({
-    id: "fot", titulo: "Fotos e Imagens", status: fingerprintsAtual.length > 5 ? "ok" : "atencao",
-    detalhe: `O relatório contém ${fingerprintsAtual.length} imagens registradas.`, origem: "regra"
-  });
+  // 1 e 2. Serviços Quadrimestrais
+  validarServico(dados.dataControlePragas, "Controle de Pragas", "pragas");
+  validarServico(dados.dataLimpezaReservatorio, "Limpeza de Reservatório", "reservatorio");
 
-  // 3. CONTROLE DE PRAGAS (Separado)
-  const pragasData = dados.dataControlePragas || "";
-  const pragasMesOk = pragasData.toLowerCase().includes(mesNomeRelatorio) || pragasData.includes(`/${mesRelatorioNum}/`);
-  const temDiaPragas = /\d{1,2}/.test(pragasData);
-  const dataPragasObj = parseDataBr(pragasData);
-  const pragasValida = dataPragasObj ? ((dataRef.getTime() - dataPragasObj.getTime()) / (1000*60*60*24*30)) <= 4 : false;
-
+  // 3. Regularidade Fiscal (Confere se o mês atual aparece no texto)
+  const mesRelNum = dados.periodoFim?.split("/")[1];
+  const nomesMeses = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  const nomeMesAlvo = nomesMeses[parseInt(mesRelNum) - 1] || "";
+  
+  const temFiscal = (texto.includes("fgts") || texto.includes("inss") || texto.includes("cnd")) && texto.includes(nomeMesAlvo);
   itens.push({
-    id: "praga", titulo: "Controle de Pragas",
-    status: (temDiaPragas && pragasMesOk && pragasValida) ? "ok" : "atencao",
-    detalhe: pragasMesOk ? (temDiaPragas ? `Realizado em ${pragasData}. ${pragasValida ? 'Válido.' : 'Vencido.'}` : `Mês de ${mesNomeRelatorio} OK, mas sem o dia exato.`) : "Data de pragas não encontrada ou fora do mês.",
+    id: "fiscal", titulo: "Regularidade Fiscal e Trabalhista",
+    status: temFiscal ? "ok" : "atencao",
+    detalhe: temFiscal ? `Comprovações de ${nomeMesAlvo} identificadas.` : `Não foi encontrada menção ao mês de ${nomeMesAlvo} nas certidões.`,
     origem: "regra"
   });
 
-  // 4. LIMPEZA DE RESERVATÓRIO (Separado)
-  const resData = dados.dataLimpezaReservatorio || "";
-  const resMesOk = resData.toLowerCase().includes(mesNomeRelatorio) || resData.includes(`/${mesRelatorioNum}/`);
-  const temDiaRes = /\d{1,2}/.test(resData);
-  const dataResObj = parseDataBr(resData);
-  const resValida = dataResObj ? ((dataRef.getTime() - dataResObj.getTime()) / (1000*60*60*24*30)) <= 4 : false;
-
+  // 4. TI e Câmeras (Presença no texto)
+  const temInfra = (texto.includes("wi-fi") || texto.includes("internet")) && (texto.includes("cftv") || texto.includes("câmeras"));
   itens.push({
-    id: "reserva", titulo: "Limpeza de Reservatório",
-    status: (temDiaRes && resMesOk && resValida) ? "ok" : "atencao",
-    detalhe: resMesOk ? (temDiaRes ? `Realizada em ${resData}. ${resValida ? 'Válido.' : 'Vencido.'}` : `Mês de ${mesNomeRelatorio} OK, mas sem o dia exato.`) : "Data de reservatório não encontrada ou fora do mês.",
+    id: "infra", titulo: "TI, Wi-Fi e Câmeras",
+    status: temInfra ? "ok" : "atencao",
+    detalhe: temInfra ? "Menções a sistemas de rede e segurança encontradas." : "Faltam informações sobre TI ou Monitoramento.",
     origem: "regra"
   });
 
-  // 5. REGULARIDADE FISCAL (Somente verificação de Mês)
-  const temFiscal = texto.includes("fgts") || texto.includes("inss") || texto.includes("regularidade");
-  const mesFiscalOk = texto.includes(mesNomeRelatorio);
+  // 5. Licença Sanitária (Presença no texto)
+  const temSanit = texto.includes("sanitária") || texto.includes("vigilância");
   itens.push({
-    id: "fisc", titulo: "Regularidade Fiscal e Trabalhista",
-    status: (temFiscal && mesFiscalOk) ? "ok" : "atencao",
-    detalhe: mesFiscalOk ? `Comprovações de ${mesNomeRelatorio} encontradas.` : `Atenção: Mês de ${mesNomeRelatorio} não citado no corpo do texto fiscal.`,
+    id: "sanit", titulo: "Licença Sanitária",
+    status: temSanit ? "ok" : "atencao",
+    detalhe: temSanit ? "Licença citada (verificar validade na foto final)." : "Licença não identificada no texto.",
     origem: "regra"
-  });
-
-  // 6. TI, WI-FI E CÂMERAS
-  const infra = (texto.includes("wi-fi") || texto.includes("internet")) && (texto.includes("cftv") || texto.includes("câmeras"));
-  itens.push({
-    id: "infra", titulo: "TI, Wi-Fi e Câmeras", status: infra ? "ok" : "atencao",
-    detalhe: infra ? "Sistemas de conectividade e segurança citados." : "Informações de TI ou Câmeras incompletas.", origem: "regra"
-  });
-
-  // 7. LICENÇA SANITÁRIA
-  const sanit = texto.includes("sanitária") || texto.includes("vigilância");
-  itens.push({
-    id: "sanit", titulo: "Licença Sanitária", status: sanit ? "ok" : "atencao",
-    detalhe: sanit ? "Citada no relatório (verificar última imagem)." : "Licença não identificada.", origem: "regra"
   });
 
   return itens;
