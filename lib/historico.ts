@@ -1,59 +1,49 @@
 import { Redis } from "@upstash/redis";
-import { HistoricoMes } from "./types";
+import zlib from "zlib";
 
-function getRedis(): Redis | null {
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
-  return new Redis({ url, token });
+const redis = Redis.fromEnv();
+
+function tratarDadosRecuperados(item: any) {
+  if (!item || !item.dados) return item;
+  
+  if (item.dados.textoCompleto?.startsWith("GZIPPED:")) {
+    try {
+      const base64Data = item.dados.textoCompleto.replace("GZIPPED:", "");
+      const buffer = Buffer.from(base64Data, "base64");
+      item.dados.textoCompleto = zlib.gunzipSync(buffer).toString();
+    } catch (e) {
+      console.error("Erro na descompressão:", e);
+    }
+  }
+  return item;
 }
 
-function chaveUnidade(unidade: string): string {
-  const slug = unidade
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-");
-  return `ceu:historico:${slug}`;
+export async function buscarUltimoHistorico(unidade: string, periodoFimAtual: string) {
+  try {
+    const key = `ceu:historico:${unidade.toLowerCase().replace(/\s+/g, "-")}`;
+    const historico = await redis.lrange(key, 0, -1);
+
+    if (!historico || historico.length === 0) return null;
+
+    const lista = historico.map((item: any) => {
+      const obj = typeof item === "string" ? JSON.parse(item) : item;
+      return tratarDadosRecuperados(obj);
+    });
+
+    return lista.find((h: any) => h.periodoFim !== periodoFimAtual) || null;
+  } catch (error) {
+    return null;
+  }
 }
 
-/**
- * Busca o último relatório salvo de uma unidade (o mais recente antes do período atual).
- */
-export async function buscarUltimoHistorico(unidade: string, periodoFimAtual: string): Promise<HistoricoMes | null> {
-  const redis = getRedis();
-  if (!redis) return null;
-
-  const chave = chaveUnidade(unidade);
-  const lista = await redis.lrange<HistoricoMes>(chave, 0, -1);
-  if (!lista || lista.length === 0) return null;
-
-  const parseDataBR = (d: string) => {
-    const [dia, mes, ano] = d.split("/").map(Number);
-    return new Date(ano, mes - 1, dia).getTime();
-  };
-
-  const atualTs = parseDataBR(periodoFimAtual);
-
-  const anteriores = lista
-    .filter((h) => parseDataBR(h.periodoFim) < atualTs)
-    .sort((a, b) => parseDataBR(b.periodoFim) - parseDataBR(a.periodoFim));
-
-  return anteriores[0] ?? null;
-}
-
-/**
- * Salva o relatório atual no histórico da unidade (mantém os últimos 12 meses).
- */
-export async function salvarHistorico(historico: HistoricoMes): Promise<void> {
-  const redis = getRedis();
-  if (!redis) return;
-
-  const chave = chaveUnidade(historico.unidade);
-  await redis.lpush(chave, historico);
-  await redis.ltrim(chave, 0, 11);
-}
-
-export function redisConfigurado(): boolean {
-  return getRedis() !== null;
+export async function salvarHistorico(payload: any) {
+  try {
+    const key = `ceu:historico:${payload.unidade.toLowerCase().replace(/\s+/g, "-")}`;
+    await redis.lpush(key, JSON.stringify(payload));
+    await redis.ltrim(key, 0, 9); // Mantém os últimos 10
+    return { ok: true };
+  } catch (error) {
+    console.error("Erro ao salvar:", error);
+    throw error;
+  }
 }
