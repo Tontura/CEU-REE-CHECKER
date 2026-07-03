@@ -2,7 +2,7 @@
 
 import { AnalysisResult } from "@/lib/types";
 
-export function ResultadoAnalise({ resultado }: { resultado: AnalysisResult }) {
+export default function ResultadoAnalise({ resultado }: { resultado: AnalysisResult }) {
   return (
     <div className="mt-8 space-y-6">
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
