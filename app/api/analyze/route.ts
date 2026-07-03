@@ -15,10 +15,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const arquivo = formData.get("arquivo") as File | null;
     const usarIA = formData.get("usarIA") === "true";
-
-    if (!arquivo) {
-      return NextResponse.json({ erro: "Nenhum arquivo enviado." }, { status: 400 });
-    }
+    if (!arquivo) return NextResponse.json({ erro: "Nenhum arquivo enviado." }, { status: 400 });
 
     const arrayBuffer = await arquivo.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -28,25 +25,19 @@ export async function POST(req: NextRequest) {
     const dados = extrairDadosRelatorio(texto, paginas);
 
     if (!dados.unidade || !dados.periodoFim) {
-      return NextResponse.json(
-        { erro: "Não foi possível identificar a unidade (CEU) ou o período do relatório neste PDF." },
-        { status: 422 }
-      );
+      return NextResponse.json({ erro: "Dados não identificados." }, { status: 422 });
     }
 
     const fingerprintsAtual = await extrairFingerprintsImagens(bytes);
     const historicoAnterior = await buscarUltimoHistorico(dados.unidade, dados.periodoFim);
-
     const itensRegras = rodarChecagensAutomaticas(dados, fingerprintsAtual, historicoAnterior);
+    
     let itensIA: CheckItem[] = [];
-    if (usarIA) {
-      itensIA = await rodarChecagensIA(dados);
-    }
+    if (usarIA) itensIA = await rodarChecagensIA(dados);
 
     const todosItens = [...itensRegras, ...itensIA];
 
-    // --- COMPRESSÃO PARA O REDIS ---
-    // Criamos uma cópia para o histórico com o texto compactado
+    // COMPRESSÃO PARA O REDIS
     const dadosParaSalvar = { ...dados };
     if (dadosParaSalvar.textoCompleto) {
       const compressed = zlib.gzipSync(dadosParaSalvar.textoCompleto);
@@ -61,26 +52,19 @@ export async function POST(req: NextRequest) {
       salvoEm: new Date().toISOString(),
     });
 
-    const resumo = {
-      ok: todosItens.filter((i) => i.status === "ok").length,
-      atencao: todosItens.filter((i) => i.status === "atencao").length,
-      desatualizado: todosItens.filter((i) => i.status === "desatualizado").length,
-    };
-
     const resultado: AnalysisResult = {
       unidade: dados.unidade,
       periodo: `${dados.periodoInicio} a ${dados.periodoFim}`,
       itens: todosItens,
-      resumo,
+      resumo: {
+        ok: todosItens.filter(i => i.status === "ok").length,
+        atencao: todosItens.filter(i => i.status === "atencao").length,
+        desatualizado: todosItens.filter(i => i.status === "desatualizado").length,
+      },
       temHistoricoAnterior: historicoAnterior !== null,
     };
-
     return NextResponse.json(resultado);
   } catch (e) {
-    console.error(e);
-    return NextResponse.json(
-      { erro: `Erro ao processar o relatório: ${e instanceof Error ? e.message : String(e)}` },
-      { status: 500 }
-    );
+    return NextResponse.json({ erro: String(e) }, { status: 500 });
   }
 }
