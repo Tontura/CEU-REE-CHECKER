@@ -46,8 +46,8 @@ export default function Home() {
     <main className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">CEU Relatório Checker</h1>
-          <p className="text-gray-600">Análise automática de conformidade (Modelo REE)</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Checador de Relatórios de Encargos — CEUs</h1>
+          <p className="text-gray-600">Envie o PDF do relatório mensal de qualquer unidade. O sistema verifica datas, validades e consistência dos dados.</p>
         </div>
 
         {!resultado ? (
