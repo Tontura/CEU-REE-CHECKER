@@ -1,118 +1,147 @@
-import { CheckItem, ImageFingerprint } from "./types";
+"use client";
 
-export function rodarChecagensAutomaticas(
-  dados: any,
-  fingerprintsAtual: ImageFingerprint[],
-  historicoAnterior: any
-): CheckItem[] {
-  const itens: CheckItem[] = [];
-  const texto = dados.textoCompleto?.toLowerCase() || "";
-  
-  // Helpers para datas
-  const mesRelatorioNum = dados.periodoFim?.split("/")[1]; // "05"
-  const nomesMeses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-  const mesRelatorioNome = nomesMeses[parseInt(mesRelatorioNum) - 1];
+import { useState } from "react";
+import { Upload, FileText, AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import ResultadoAnalise from "@/components/ResultadoAnalise";
+import { AnalysisResult } from "@/lib/types";
 
-  // 1. CONTEXTO E APRESENTAÇÃO
-  const temApresentacao = texto.includes("apresentação") || texto.includes("contextualização") || texto.includes("introdução");
-  itens.push({
-    id: "contexto",
-    titulo: "Contexto e Apresentação",
-    status: temApresentacao ? "ok" : "atencao",
-    detalhe: temApresentacao ? "Estrutura de apresentação identificada." : "Não foi identificada uma seção clara de apresentação.",
-    origem: "regra"
-  });
+export default function Home() {
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [analisando, setAnalisando] = useState(false);
+  const [resultado, setResultado] = useState<AnalysisResult | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
 
-  // 2. FOTOS
-  itens.push({
-    id: "fotos",
-    titulo: "Fotos e Imagens",
-    status: fingerprintsAtual.length > 0 ? "ok" : "atencao",
-    detalhe: fingerprintsAtual.length > 0 ? `Identificadas ${fingerprintsAtual.length} imagens no documento.` : "Nenhuma foto detectada.",
-    origem: "regra"
-  });
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setArquivo(e.target.files[0]);
+      setErro(null);
+    }
+  };
 
-  // 3. CONTROLE DE PRAGAS (SEPARADO)
-  const pragasData = dados.dataControlePragas || "";
-  const pragasMesOk = pragasData.toLowerCase().includes(mesRelatorioNome) || pragasData.includes(`/${mesRelatorioNum}/`);
-  const temDiaPragas = /\d{1,2}\/\d{1,2}\/\d{4}/.test(pragasData) || /\d{1,2} de/.test(pragasData.toLowerCase());
+  const analisarRelatorio = async () => {
+    if (!arquivo) return;
 
-  itens.push({
-    id: "controle_pragas",
-    titulo: "Controle de Pragas",
-    status: (temDiaPragas && pragasMesOk) ? "ok" : (pragasMesOk ? "atencao" : "atencao"),
-    detalhe: pragasMesOk 
-      ? (temDiaPragas ? `Realizado no dia ${pragasData}.` : `Mês de ${mesRelatorioNome} identificado, mas sem o dia exato.`)
-      : "Data não encontrada ou diverge do mês do relatório.",
-    origem: "regra"
-  });
+    setAnalisando(true);
+    setErro(null);
 
-  // 4. LIMPEZA DE RESERVATÓRIO (SEPARADO)
-  const reservaData = dados.dataLimpezaReservatorio || "";
-  const reservaMesOk = reservaData.toLowerCase().includes(mesRelatorioNome) || reservaData.includes(`/${mesRelatorioNum}/`);
-  const temDiaReserva = /\d{1,2}\/\d{1,2}\/\d{4}/.test(reservaData) || /\d{1,2} de/.test(reservaData.toLowerCase());
+    const formData = new FormData();
+    formData.append("arquivo", arquivo);
 
-  itens.push({
-    id: "limpeza_reservatorio",
-    titulo: "Limpeza de Reservatório",
-    status: (temDiaReserva && reservaMesOk) ? "ok" : (reservaMesOk ? "atencao" : "atencao"),
-    detalhe: reservaMesOk 
-      ? (temDiaReserva ? `Realizada no dia ${reservaData}.` : `Mês de ${mesRelatorioNome} identificado, mas sem o dia exato.`)
-      : "Data não encontrada ou diverge do mês do relatório.",
-    origem: "regra"
-  });
+    try {
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        body: formData,
+      });
 
-  // 5. REGULARIDADE FISCAL E TRABALHISTA (BUSCA NO TEXTO)
-  const termosFiscal = ["fgts", "inss", "trabalhista", "cnd", "regularidade fiscal", "certidão"];
-  const citouFiscal = termosFiscal.some(t => texto.includes(t));
-  // Busca por qualquer data próxima aos termos fiscais no texto
-  const temDataFiscal = /\d{1,2}\/\d{1,2}\/\d{4}/.test(texto);
+      const data = await response.json();
 
-  itens.push({
-    id: "fiscal",
-    titulo: "Regularidade Fiscal e Trabalhista",
-    status: (citouFiscal && temDataFiscal) ? "ok" : "atencao",
-    detalhe: citouFiscal ? "Dados de regularidade identificados no corpo do texto." : "Não foram identificadas menções à regularidade fiscal no texto.",
-    origem: "regra"
-  });
+      if (!response.ok) {
+        throw new Error(data.erro || "Erro ao analisar o relatório");
+      }
 
-  // 6. LICENÇA SANITÁRIA (CONSIDERA ÚLTIMAS IMAGENS)
-  const citouSanitaria = texto.includes("sanitária") || texto.includes("vigilância");
-  const temMuitasImagens = fingerprintsAtual.length > 5; // Geralmente a licença é uma das últimas imagens
+      setResultado(data);
+    } catch (err: any) {
+      setErro(err.message);
+    } finally {
+      setAnalisando(false);
+    }
+  };
 
-  itens.push({
-    id: "licenca_sanitaria",
-    titulo: "Licença Sanitária",
-    status: (citouSanitaria || dados.validadeLicencaSanitaria) ? "ok" : "atencao",
-    detalhe: dados.validadeLicencaSanitaria 
-      ? `Validade: ${dados.validadeLicencaSanitaria}.` 
-      : (citouSanitaria ? "Licença citada e possivelmente presente nos anexos fotográficos finais." : "Documento não identificado."),
-    origem: "regra"
-  });
+  const resetar = () => {
+    setArquivo(null);
+    setResultado(null);
+    setErro(null);
+  };
 
-  // 7. TI, WI-FI E CÂMERAS
-  const temTI = texto.includes("wi-fi") || texto.includes("internet") || texto.includes("link");
-  const temCameras = texto.includes("câmeras") || texto.includes("cftv") || texto.includes("monitoramento");
-  
-  itens.push({
-    id: "infra",
-    titulo: "TI, Wi-Fi e Câmeras",
-    status: (temTI && temCameras) ? "ok" : "atencao",
-    detalhe: `TI/Wi-Fi: ${temTI ? 'OK' : 'Não citado'}. Câmeras: ${temCameras ? 'OK' : 'Não citado'}.`,
-    origem: "regra"
-  });
+  return (
+    <main className="min-h-screen bg-gray-50 py-8 px-4">
+      <div className="max-w-4xl mx-auto">
+        {/* Cabeçalho */}
+        <div className="text-center mb-10">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            CEU Relatório Checker
+          </h1>
+          <p className="text-gray-600">
+            Análise automática de conformidade para Relatórios de Execução de Encargos
+          </p>
+        </div>
 
-  // 8. FORNECIMENTOS (ÁGUA E LUZ)
-  const aguaOk = dados.mesesGraficoAgua?.some((m: string) => m.toLowerCase().includes(mesRelatorioNome));
-  const luzOk = dados.mesesGraficoEnergia?.some((m: string) => m.toLowerCase().includes(mesRelatorioNome));
+        {!resultado ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-12 transition-colors hover:border-blue-400">
+              <Upload className="w-12 h-12 text-gray-400 mb-4" />
+              <p className="text-lg font-medium text-gray-700 mb-1">
+                {arquivo ? arquivo.name : "Arraste o PDF ou clique para selecionar"}
+              </p>
+              <p className="text-sm text-gray-500 mb-6">Apenas arquivos PDF (Modelo REE)</p>
+              
+              <input
+                type="file"
+                accept=".pdf"
+                className="hidden"
+                id="file-upload"
+                onChange={handleFileChange}
+                disabled={analisando}
+              />
+              <label
+                htmlFor="file-upload"
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium cursor-pointer hover:bg-blue-700 transition-colors"
+              >
+                Selecionar Arquivo
+              </label>
+            </div>
 
-  itens.push({
-    id: "consumos",
-    titulo: "Consumo de Água e Luz",
-    status: (aguaOk && luzOk) ? "ok" : "atencao",
-    detalhe: `Água: ${aguaOk ? 'Mês Correto' : 'Divergente'}. Luz: ${luzOk ? 'Mês Correto' : 'Divergente'}.`,
-    origem: "regra"
-  });
+            {erro && (
+              <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                <p className="text-sm text-red-700">{erro}</p>
+              </div>
+            )}
 
-  return itens;
+            <button
+              onClick={analisarRelatorio}
+              disabled={!arquivo || analisando}
+              className={`w-full mt-8 py-3 rounded-lg font-bold text-lg flex items-center justify-center gap-2 transition-all ${
+                !arquivo || analisando
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  : "bg-green-600 text-white hover:bg-green-700 shadow-md"
+              }`}
+            >
+              {analisando ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Processando Relatório...
+                </>
+              ) : (
+                <>
+                  <FileText className="w-5 h-5" />
+                  Iniciar Análise
+                </>
+              )}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <button
+                onClick={resetar}
+                className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Analisar outro arquivo
+              </button>
+            </div>
+            
+            <ResultadoAnalise resultado={resultado} />
+          </div>
+        )}
+      </div>
+
+      {/* RODAPÉ COM SEUS CRÉDITOS */}
+      <footer className="mt-12 text-center text-gray-400 text-sm space-y-1">
+        <p>&copy; {new Date().getFullYear()} - Sistema de Verificação CEU</p>
+        <p className="font-medium text-gray-500">Desenvolvido por Hilton Cortez</p>
+      </footer>
+    </main>
+  );
 }
