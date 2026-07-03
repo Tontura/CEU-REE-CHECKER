@@ -61,4 +61,24 @@ export function rodarChecagensAutomaticas(
 
   // --- 3. OUTROS DADOS (Controle de Pragas, Reservatório, etc) ---
   if (dados.dataControlePragas) {
-    iten
+    itens.push({
+      id: "pragas",
+      label: "Controle de Pragas",
+      status: "ok",
+      observacao: `Realizado em: ${dados.dataControlePragas}.`,
+      categoria: "Regra automática"
+    });
+  }
+
+  if (dados.dataLimpezaReservatorio) {
+    itens.push({
+      id: "reservatorio",
+      label: "Limpeza de Reservatório",
+      status: "ok",
+      observacao: `Realizada em: ${dados.dataLimpezaReservatorio}.`,
+      categoria: "Regra automática"
+    });
+  }
+
+  return itens;
+}
