@@ -17,8 +17,8 @@ export default function ResultadoAnalise({ resultado }: { resultado: AnalysisRes
             <p className="text-2xl font-bold text-yellow-700">{resultado.resumo.atencao}</p>
           </div>
           <div className="p-3 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600 font-medium">Histórico</p>
-            <p className="text-xs text-gray-500">{resultado.temHistoricoAnterior ? "Identificado" : "Primeiro"}</p>
+            <p className="text-sm text-gray-600 font-medium">Itens</p>
+            <p className="text-xl font-bold text-gray-700">{resultado.itens.length}</p>
           </div>
         </div>
       </div>
