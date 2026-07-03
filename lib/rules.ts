@@ -1,147 +1,88 @@
-"use client";
+import { CheckItem, ImageFingerprint } from "./types";
 
-import { useState } from "react";
-import { Upload, FileText, AlertCircle, Loader2, RefreshCw } from "lucide-react";
-import ResultadoAnalise from "@/components/ResultadoAnalise";
-import { AnalysisResult } from "@/lib/types";
+export function rodarChecagensAutomaticas(
+  dados: any,
+  fingerprintsAtual: ImageFingerprint[],
+  historicoAnterior: any
+): CheckItem[] {
+  const itens: CheckItem[] = [];
+  const texto = dados.textoCompleto?.toLowerCase() || "";
+  
+  const mesRelatorioNum = dados.periodoFim?.split("/")[1]; 
+  const nomesMeses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+  const mesRelatorioNome = nomesMeses[parseInt(mesRelatorioNum) - 1];
 
-export default function Home() {
-  const [arquivo, setArquivo] = useState<File | null>(null);
-  const [analisando, setAnalisando] = useState(false);
-  const [resultado, setResultado] = useState<AnalysisResult | null>(null);
-  const [erro, setErro] = useState<string | null>(null);
+  // 1. CONTEXTO E APRESENTAÇÃO
+  const temApresentacao = texto.includes("apresentação") || texto.includes("contextualização") || texto.includes("introdução");
+  itens.push({
+    id: "contexto",
+    titulo: "Contexto e Apresentação",
+    status: temApresentacao ? "ok" : "atencao",
+    detalhe: temApresentacao ? "Estrutura de apresentação identificada." : "Não foi identificada uma seção clara de apresentação.",
+    origem: "regra"
+  });
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setArquivo(e.target.files[0]);
-      setErro(null);
-    }
-  };
+  // 2. FOTOS
+  itens.push({
+    id: "fotos",
+    titulo: "Fotos e Imagens",
+    status: fingerprintsAtual.length > 0 ? "ok" : "atencao",
+    detalhe: fingerprintsAtual.length > 0 ? `Identificadas ${fingerprintsAtual.length} imagens no documento.` : "Nenhuma foto detectada.",
+    origem: "regra"
+  });
 
-  const analisarRelatorio = async () => {
-    if (!arquivo) return;
+  // 3. CONTROLE DE PRAGAS
+  const pragasData = dados.dataControlePragas || "";
+  const pragasMesOk = pragasData.toLowerCase().includes(mesRelatorioNome) || pragasData.includes(`/${mesRelatorioNum}/`);
+  const temDiaPragas = /\d{1,2}/.test(pragasData);
 
-    setAnalisando(true);
-    setErro(null);
+  itens.push({
+    id: "controle_pragas",
+    titulo: "Controle de Pragas",
+    status: (temDiaPragas && pragasMesOk) ? "ok" : (pragasMesOk ? "atencao" : "atencao"),
+    detalhe: pragasMesOk 
+      ? (temDiaPragas ? `Realizado em ${pragasData}.` : `Mês de ${mesRelatorioNome} identificado, mas sem o dia exato.`)
+      : "Data não encontrada ou diverge do mês do relatório.",
+    origem: "regra"
+  });
 
-    const formData = new FormData();
-    formData.append("arquivo", arquivo);
+  // 4. LIMPEZA DE RESERVATÓRIO
+  const reservaData = dados.dataLimpezaReservatorio || "";
+  const reservaMesOk = reservaData.toLowerCase().includes(mesRelatorioNome) || reservaData.includes(`/${mesRelatorioNum}/`);
+  const temDiaReserva = /\d{1,2}/.test(reservaData);
 
-    try {
-      const response = await fetch("/api/analyze", {
-        method: "POST",
-        body: formData,
-      });
+  itens.push({
+    id: "limpeza_reservatorio",
+    titulo: "Limpeza de Reservatório",
+    status: (temDiaReserva && reservaMesOk) ? "ok" : (reservaMesOk ? "atencao" : "atencao"),
+    detalhe: reservaMesOk 
+      ? (temDiaReserva ? `Realizada em ${reservaData}.` : `Mês de ${mesRelatorioNome} identificado, mas sem o dia exato.`)
+      : "Data não encontrada ou diverge do mês do relatório.",
+    origem: "regra"
+  });
 
-      const data = await response.json();
+  // 5. REGULARIDADE FISCAL E TRABALHISTA
+  const termosFiscal = ["fgts", "inss", "trabalhista", "cnd", "regularidade", "certidão"];
+  const citouFiscal = termosFiscal.some(t => texto.includes(t));
+  const temDataFiscal = /\d{1,2}\/\d{1,2}\/\d{4}/.test(texto);
 
-      if (!response.ok) {
-        throw new Error(data.erro || "Erro ao analisar o relatório");
-      }
+  itens.push({
+    id: "fiscal",
+    titulo: "Regularidade Fiscal e Trabalhista",
+    status: (citouFiscal && temDataFiscal) ? "ok" : "atencao",
+    detalhe: citouFiscal ? "Dados de regularidade identificados no texto." : "Não foram identificadas menções à regularidade fiscal.",
+    origem: "regra"
+  });
 
-      setResultado(data);
-    } catch (err: any) {
-      setErro(err.message);
-    } finally {
-      setAnalisando(false);
-    }
-  };
+  // 6. LICENÇA SANITÁRIA
+  const citouSanitaria = texto.includes("sanitária") || texto.includes("vigilância");
+  itens.push({
+    id: "licenca_sanitaria",
+    titulo: "Licença Sanitária",
+    status: (citouSanitaria || dados.validadeLicencaSanitaria) ? "ok" : "atencao",
+    detalhe: dados.validadeLicencaSanitaria ? `Validade: ${dados.validadeLicencaSanitaria}.` : (citouSanitaria ? "Licença citada (verificar fotos finais)." : "Documento não identificado."),
+    origem: "regra"
+  });
 
-  const resetar = () => {
-    setArquivo(null);
-    setResultado(null);
-    setErro(null);
-  };
-
-  return (
-    <main className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Cabeçalho */}
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            CEU Relatório Checker
-          </h1>
-          <p className="text-gray-600">
-            Análise automática de conformidade para Relatórios de Execução de Encargos
-          </p>
-        </div>
-
-        {!resultado ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-            <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-12 transition-colors hover:border-blue-400">
-              <Upload className="w-12 h-12 text-gray-400 mb-4" />
-              <p className="text-lg font-medium text-gray-700 mb-1">
-                {arquivo ? arquivo.name : "Arraste o PDF ou clique para selecionar"}
-              </p>
-              <p className="text-sm text-gray-500 mb-6">Apenas arquivos PDF (Modelo REE)</p>
-              
-              <input
-                type="file"
-                accept=".pdf"
-                className="hidden"
-                id="file-upload"
-                onChange={handleFileChange}
-                disabled={analisando}
-              />
-              <label
-                htmlFor="file-upload"
-                className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium cursor-pointer hover:bg-blue-700 transition-colors"
-              >
-                Selecionar Arquivo
-              </label>
-            </div>
-
-            {erro && (
-              <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
-                <p className="text-sm text-red-700">{erro}</p>
-              </div>
-            )}
-
-            <button
-              onClick={analisarRelatorio}
-              disabled={!arquivo || analisando}
-              className={`w-full mt-8 py-3 rounded-lg font-bold text-lg flex items-center justify-center gap-2 transition-all ${
-                !arquivo || analisando
-                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                  : "bg-green-600 text-white hover:bg-green-700 shadow-md"
-              }`}
-            >
-              {analisando ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Processando Relatório...
-                </>
-              ) : (
-                <>
-                  <FileText className="w-5 h-5" />
-                  Iniciar Análise
-                </>
-              )}
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <button
-                onClick={resetar}
-                className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium transition-colors"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Analisar outro arquivo
-              </button>
-            </div>
-            
-            <ResultadoAnalise resultado={resultado} />
-          </div>
-        )}
-      </div>
-
-      {/* RODAPÉ COM SEUS CRÉDITOS */}
-      <footer className="mt-12 text-center text-gray-400 text-sm space-y-1">
-        <p>&copy; {new Date().getFullYear()} - Sistema de Verificação CEU</p>
-        <p className="font-medium text-gray-500">Desenvolvido por Hilton Cortez</p>
-      </footer>
-    </main>
-  );
+  return itens;
 }
