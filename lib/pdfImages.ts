@@ -91,4 +91,25 @@ export async function extrairFingerprintsImagens(
 
 export function compararFingerprints(
   atual: ImageFingerprint[],
-  anterio
+  anterior: ImageFingerprint[],
+  limiar = 0.9
+) {
+  let identicas = 0;
+  const paginasSuspeitas: number[] = [];
+
+  for (const fpAtual of atual) {
+    const encontrouIgual = anterior.some(
+      (fpAnterior) => similaridadeHash(fpAtual.hash, fpAnterior.hash) >= limiar
+    );
+    if (encontrouIgual) {
+      identicas++;
+      paginasSuspeitas.push(fpAtual.pagina);
+    }
+  }
+
+  return {
+    totalAtual: atual.length,
+    identicas,
+    paginasSuspeitas: Array.from(new Set(paginasSuspeitas)),
+  };
+}
