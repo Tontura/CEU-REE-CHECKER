@@ -13,16 +13,16 @@ export async function POST(req: NextRequest) {
 
     const buffer = Buffer.from(await arquivo.arrayBuffer());
 
-    // 1. Extração de texto (fica apenas na memória do servidor)
+    // 1. Extração de texto
     const { texto } = await extrairTextoPdf(buffer);
     
-    // 2. Extração de dados (Unidade, Datas, etc)
+    // 2. Extração de dados (Enviando apenas o texto como argumento)
     const dados = extrairDadosRelatorio(texto);
 
-    // 3. Rodar as checagens (Passamos o texto como string separada)
+    // 3. Rodar as checagens
     const itensRegras = rodarChecagensAutomaticas(dados, texto);
 
-    // 4. RESPOSTA MINÚSCULA (JSON de poucos KB)
+    // 4. Resposta Final
     return NextResponse.json({
       unidade: dados.unidade,
       periodo: `${dados.periodoInicio} a ${dados.periodoFim}`,
@@ -36,6 +36,6 @@ export async function POST(req: NextRequest) {
 
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ erro: "Erro ao processar o arquivo. Tente novamente." }, { status: 500 });
+    return NextResponse.json({ erro: "Erro ao processar o arquivo." }, { status: 500 });
   }
 }
