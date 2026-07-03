@@ -120,20 +120,7 @@ export default function Home() {
         </label>
 
         <div className="mt-4 flex items-center justify-between">
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={usarIA}
-              onChange={(e) => setUsarIA(e.target.checked)}
-            />
-            Incluir análise por IA (checagens flexíveis de texto)
-          </label>
-
-          <button
-            onClick={analisar}
-            disabled={!arquivo || carregando}
-            className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-40"
-          >
+        
             {carregando ? "Analisando..." : "Analisar relatório"}
           </button>
         </div>
