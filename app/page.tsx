@@ -88,7 +88,7 @@ export default function Home() {
       </div>
 
       <footer className="mt-12 text-center text-gray-400 text-sm space-y-1">
-        <p>&copy; {new Date().getFullYear()} - Sistema de Verificação CEU</p>
+        <p>&copy; {new Date().getFullYear()} - Sistema de Verificação de REE dos CEUs</p>
         <p className="font-bold text-gray-600">Desenvolvido por Hilton Cortez</p>
       </footer>
     </main>
