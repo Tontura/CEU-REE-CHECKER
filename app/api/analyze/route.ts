@@ -11,32 +11,26 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const arquivo = formData.get("arquivo") as File | null;
 
-    if (!arquivo) {
-      return NextResponse.json({ erro: "Nenhum arquivo enviado." }, { status: 400 });
-    }
+    if (!arquivo) return NextResponse.json({ erro: "Arquivo não enviado." }, { status: 400 });
 
     const arrayBuffer = await arquivo.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const bytes = new Uint8Array(arrayBuffer);
 
-    // 1. Extração de Texto do PDF
+    // 1. Extração pesada (ocorre apenas dentro do servidor)
     const { texto, paginas } = await extrairTextoPdf(buffer);
-    
-    // 2. Extração de Dados (Datas, Unidade, etc)
     const dados = extrairDadosRelatorio(texto, paginas);
 
     if (!dados.unidade || !dados.periodoFim) {
-      return NextResponse.json({ erro: "Não foi possível identificar o CEU ou o Período no PDF." }, { status: 422 });
+      return NextResponse.json({ erro: "Dados básicos (Unidade/Período) não encontrados no PDF." }, { status: 422 });
     }
 
-    // 3. Extração de Imagens/Fotos (para a análise atual)
     const fingerprintsAtual = await extrairFingerprintsImagens(bytes);
 
-    // 4. Rodar as Regras Automáticas (Pragas, Reservatório, Fiscal, etc)
-    // Passamos null no histórico anterior porque agora não salvamos mais nada
+    // 2. Análise (usa o texto gigante, mas gera um resultado pequeno)
     const itensRegras = rodarChecagensAutomaticas(dados, fingerprintsAtual, null);
 
-    // 5. Retornar apenas o resultado da análise para a tela
+    // 3. RESPOSTA SEGURA (NÃO enviamos o textoCompleto de volta)
     return NextResponse.json({
       unidade: dados.unidade,
       periodo: `${dados.periodoInicio || ""} a ${dados.periodoFim}`,
@@ -50,10 +44,7 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (e) {
-    console.error("Erro na análise:", e);
-    return NextResponse.json(
-      { erro: "Erro ao processar o PDF. Certifique-se de que é um arquivo válido." },
-      { status: 500 }
-    );
+    console.error(e);
+    return NextResponse.json({ erro: "Erro ao processar o arquivo. Tente novamente." }, { status: 500 });
   }
 }
