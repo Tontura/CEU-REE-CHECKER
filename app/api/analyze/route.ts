@@ -21,36 +21,37 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
     const bytes = new Uint8Array(arrayBuffer);
 
-    // 1. Extrai tudo para análise (aqui o texto de 13MB ainda existe na memória)
+    // 1. Extração para análise atual (aqui usamos tudo)
     const { texto, paginas } = await extrairTextoPdf(buffer);
     const dados = extrairDadosRelatorio(texto, paginas);
 
     if (!dados.unidade || !dados.periodoFim) {
-      return NextResponse.json({ erro: "Dados do CEU não identificados no PDF." }, { status: 422 });
+      return NextResponse.json({ erro: "Dados do CEU não identificados." }, { status: 422 });
     }
 
     const fingerprintsAtual = await extrairFingerprintsImagens(bytes);
     const historicoAnterior = await buscarUltimoHistorico(dados.unidade, dados.periodoFim);
-
-    // 2. Roda as regras e IA (elas precisam do texto agora)
     const itensRegras = rodarChecagensAutomaticas(dados, fingerprintsAtual, historicoAnterior);
+    
     let itensIA: CheckItem[] = [];
     if (usarIA) itensIA = await rodarChecagensIA(dados);
 
     const todosItens = [...itensRegras, ...itensIA];
 
-    // --- A SOLUÇÃO AQUI ---
-    // Criamos uma cópia dos dados EXCLUINDO o campo textoCompleto
-    // Isso reduz o objeto de 13.8MB para apenas alguns KB.
-    const { textoCompleto, ...dadosParaHistorico } = dados;
+    // --- AQUI ESTÁ A CORREÇÃO PARA O ERRO DE TAMANHO ---
+    // Removemos o textoCompleto e limitamos o número de fingerprints salvos
+    // Guardamos apenas as primeiras 50 imagens (geralmente o suficiente para detectar fraudes)
+    const { textoCompleto, ...dadosParaSalvar } = dados;
+    const imagensReduzidas = fingerprintsAtual.slice(0, 50); 
 
     await salvarHistorico({
       unidade: dados.unidade,
       periodoFim: dados.periodoFim,
-      dados: dadosParaHistorico, // Salvamos apenas os campos processados
-      imagens: fingerprintsAtual,
+      dados: dadosParaSalvar, // Salva sem o texto gigante
+      imagens: imagensReduzidas, // Salva apenas as digitais das imagens principais
       salvoEm: new Date().toISOString(),
     });
+    // --------------------------------------------------
 
     const resultado: AnalysisResult = {
       unidade: dados.unidade,
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(resultado);
   } catch (e) {
-    console.error("Erro na API:", e);
+    console.error(e);
     return NextResponse.json({ erro: "Erro ao processar o relatório." }, { status: 500 });
   }
 }
