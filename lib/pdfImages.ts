@@ -31,11 +31,9 @@ function calcularAverageHash(
 
   let hash = "";
   for (let p = 0; p < grays.length; p++) {
-    // Corrigido: lógica separada para evitar erro de interpretação do compilador
     const bit = grays[p] >= media ? "1" : "0";
     hash += bit;
   }
-
   return hash;
 }
 
@@ -55,23 +53,19 @@ export async function extrairFingerprintsImagens(
   try {
     const loadingTask = getDocument({ data: pdfBuffer });
     const pdf = await loadingTask.promise;
-
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       try {
         const page = await pdf.getPage(pageNum);
         const opList = await page.getOperatorList();
-
         for (let i = 0; i < opList.fnArray.length; i++) {
           const operacao = opList.fnArray[i];
           if (operacao !== OPS.paintImageXObject && operacao !== OPS.paintInlineImageXObject) continue;
-
           const nome = opList.argsArray[i]?.[0];
           try {
             const img = await new Promise<any>((resolve, reject) => {
               page.objs.get(nome, (obj: any) => resolve(obj));
               setTimeout(() => reject(new Error("timeout")), 5000);
             });
-
             if (img && img.data && img.width && img.height) {
               const canais = Math.max(3, Math.round(img.data.length / (img.width * img.height)));
               const hash = calcularAverageHash(img.data, img.width, img.height, canais);
@@ -79,37 +73,21 @@ export async function extrairFingerprintsImagens(
             }
           } catch { continue; }
         }
-      } catch (erroPagina) {
-        console.error(`Erro na página ${pageNum}:`, erroPagina);
-      }
+      } catch (erroPagina) { console.error(erroPagina); }
     }
-  } catch (erro) {
-    console.error("Erro ao extrair imagens do PDF:", erro);
-  }
+  } catch (erro) { console.error(erro); }
   return fingerprints;
 }
 
-export function compararFingerprints(
-  atual: ImageFingerprint[],
-  anterior: ImageFingerprint[],
-  limiar = 0.9
-) {
+export function compararFingerprints(atual: ImageFingerprint[], anterior: ImageFingerprint[], limiar = 0.9) {
   let identicas = 0;
   const paginasSuspeitas: number[] = [];
-
   for (const fpAtual of atual) {
-    const encontrouIgual = anterior.some(
-      (fpAnterior) => similaridadeHash(fpAtual.hash, fpAnterior.hash) >= limiar
-    );
+    const encontrouIgual = anterior.some(fpAnterior => similaridadeHash(fpAtual.hash, fpAnterior.hash) >= limiar);
     if (encontrouIgual) {
       identicas++;
       paginasSuspeitas.push(fpAtual.pagina);
     }
   }
-
-  return {
-    totalAtual: atual.length,
-    identicas,
-    paginasSuspeitas: Array.from(new Set(paginasSuspeitas)),
-  };
+  return { totalAtual: atual.length, identicas, paginasSuspeitas: Array.from(new Set(paginasSuspeitas)) };
 }
