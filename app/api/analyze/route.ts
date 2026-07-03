@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { extrairTextoPdf, extrairDadosRelatorio } from "@/lib/pdfExtract";
 import { extrairFingerprintsImagens } from "@/lib/pdfImages";
 import { rodarChecagensAutomaticas } from "@/lib/rules";
-import { buscarUltimoHistorico, salvarHistorico } from "@/lib/historico";
-import { AnalysisResult } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -13,46 +11,49 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const arquivo = formData.get("arquivo") as File | null;
 
-    if (!arquivo) return NextResponse.json({ erro: "Nenhum arquivo enviado." }, { status: 400 });
+    if (!arquivo) {
+      return NextResponse.json({ erro: "Nenhum arquivo enviado." }, { status: 400 });
+    }
 
     const arrayBuffer = await arquivo.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const bytes = new Uint8Array(arrayBuffer);
 
+    // 1. Extração de Texto do PDF
     const { texto, paginas } = await extrairTextoPdf(buffer);
+    
+    // 2. Extração de Dados (Datas, Unidade, etc)
     const dados = extrairDadosRelatorio(texto, paginas);
 
     if (!dados.unidade || !dados.periodoFim) {
-      return NextResponse.json({ erro: "Dados não identificados." }, { status: 422 });
+      return NextResponse.json({ erro: "Não foi possível identificar o CEU ou o Período no PDF." }, { status: 422 });
     }
 
+    // 3. Extração de Imagens/Fotos (para a análise atual)
     const fingerprintsAtual = await extrairFingerprintsImagens(bytes);
-    const historicoAnterior = await buscarUltimoHistorico(dados.unidade, dados.periodoFim);
-    const itensRegras = rodarChecagensAutomaticas(dados, fingerprintsAtual, historicoAnterior);
 
-    const { textoCompleto, ...dadosParaHistorico } = dados;
-    await salvarHistorico({
-      unidade: dados.unidade,
-      periodoFim: dados.periodoFim,
-      dados: dadosParaHistorico,
-      imagens: fingerprintsAtual.slice(0, 50),
-      salvoEm: new Date().toISOString(),
-    });
+    // 4. Rodar as Regras Automáticas (Pragas, Reservatório, Fiscal, etc)
+    // Passamos null no histórico anterior porque agora não salvamos mais nada
+    const itensRegras = rodarChecagensAutomaticas(dados, fingerprintsAtual, null);
 
-    const resultado: AnalysisResult = {
+    // 5. Retornar apenas o resultado da análise para a tela
+    return NextResponse.json({
       unidade: dados.unidade,
       periodo: `${dados.periodoInicio || ""} a ${dados.periodoFim}`,
       itens: itensRegras,
       resumo: {
         ok: itensRegras.filter(i => i.status === "ok").length,
         atencao: itensRegras.filter(i => i.status === "atencao").length,
-        desatualizado: itensRegras.filter(i => i.status === "desatualizado").length,
+        desatualizado: 0
       },
-      temHistoricoAnterior: historicoAnterior !== null,
-    };
+      temHistoricoAnterior: false
+    });
 
-    return NextResponse.json(resultado);
   } catch (e) {
-    return NextResponse.json({ erro: "Erro no processamento." }, { status: 500 });
+    console.error("Erro na análise:", e);
+    return NextResponse.json(
+      { erro: "Erro ao processar o PDF. Certifique-se de que é um arquivo válido." },
+      { status: 500 }
+    );
   }
 }
