@@ -20,10 +20,11 @@ export function rodarChecagensAutomaticas(dados: any, textoBruto: string): Check
   const itens: CheckItem[] = [];
   const texto = textoBruto.toLowerCase();
   
-  // Mês de referência do relatório
+  // Mês de referência do relatório para conferência de validade
   const mesRelNum = dados.periodoFim?.split("/")[1];
   const nomesMeses = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
   const nomeMesAlvo = nomesMeses[parseInt(mesRelNum) - 1] || "";
+  const dataRef = parseDataBr(dados.periodoFim) || new Date();
 
   // 1. Contexto e Apresentação
   const temContexto = texto.includes("contexto") || texto.includes("introdução");
@@ -35,66 +36,61 @@ export function rodarChecagensAutomaticas(dados: any, textoBruto: string): Check
     origem: "regra"
   });
 
-  // 2. Fotos
-  const temFotos = texto.includes("registro fotográfico") || texto.includes("fotos") || texto.includes("iluminância");
-  itens.push({
-    id: "fotos", titulo: "Registros Fotográficos",
-    status: temFotos ? "ok" : "atencao",
-    detalhe: temFotos ? "Menções a fotos e evidências encontradas." : "Não foram encontradas menções explícitas a fotos.",
-    origem: "regra"
-  });
-
-  // 3. Água, Luz e Gás (Verificação de Mês)
+  // 2. Água, Luz e Gás (Verificação de Mês Correto)
   const temAgua = texto.includes("água") && texto.includes(nomeMesAlvo);
   const temLuz = (texto.includes("energia") || texto.includes("luz")) && texto.includes(nomeMesAlvo);
   const temGas = (texto.includes("gás") || texto.includes("glp"));
   itens.push({
-    id: "utilidades", titulo: "Água, Luz e Gás",
+    id: "utilidades", titulo: "Consumo de Água, Luz e Gás",
     status: (temAgua && temLuz) ? "ok" : "atencao",
-    detalhe: `Água/Luz ${nomeMesAlvo}: ${temAgua && temLuz ? 'OK' : 'Mês não citado'}. Gás: ${temGas ? 'Citado' : 'Não citado'}.`,
+    detalhe: `Água/Luz ${nomeMesAlvo}: ${temAgua && temLuz ? 'OK' : 'Mês não citado no gráfico'}. Gás: ${temGas ? 'Citado' : 'Não identificado'}.`,
     origem: "regra"
   });
 
-  // 4. Controle de Pragas (Data + Mês + Anexo)
-  const pragaDataOk = dados.dataControlePragas?.toLowerCase().includes(nomeMesAlvo) || dados.dataControlePragas?.includes(`/${mesRelNum}/`);
+  // 3. Controle de Pragas (Data + Quadrimestral + Anexo)
+  const pragaDataObj = parseDataBr(dados.dataControlePragas || "");
+  const pragaValida = pragaDataObj ? ((dataRef.getTime() - pragaDataObj.getTime()) / (1000*60*60*24*30)) <= 4 : false;
   const pragaAnexo = texto.includes("anexo") && (texto.includes("praga") || texto.includes("desinsetização"));
+  
   itens.push({
     id: "praga", titulo: "Controle de Pragas",
-    status: (pragaDataOk && pragaAnexo) ? "ok" : "atencao",
-    detalhe: `Data: ${dados.dataControlePragas || 'Não detectada'}. Mês OK: ${pragaDataOk ? 'Sim' : 'Não'}. Anexo citado: ${pragaAnexo ? 'Sim' : 'Não'}.`,
+    status: (pragaValida && pragaAnexo) ? "ok" : "atencao",
+    detalhe: `Data: ${dados.dataControlePragas || 'Não detectada'}. Validade 4 meses: ${pragaValida ? 'OK' : 'Vencida'}. Anexo citado: ${pragaAnexo ? 'Sim' : 'Não'}.`,
     origem: "regra"
   });
 
-  // 5. Limpeza de Reservatórios (Data + Mês + Anexo)
-  const resDataOk = dados.dataLimpezaReservatorio?.toLowerCase().includes(nomeMesAlvo) || dados.dataLimpezaReservatorio?.includes(`/${mesRelNum}/`);
+  // 4. Limpeza de Reservatórios (Data + Quadrimestral + Anexo)
+  const resDataObj = parseDataBr(dados.dataLimpezaReservatorio || "");
+  const resValida = resDataObj ? ((dataRef.getTime() - resDataObj.getTime()) / (1000*60*60*24*30)) <= 4 : false;
   const resAnexo = texto.includes("anexo") && (texto.includes("reservatório") || texto.includes("caixa"));
+
   itens.push({
     id: "reserva", titulo: "Limpeza de Reservatório",
-    status: (resDataOk && resAnexo) ? "ok" : "atencao",
-    detalhe: `Data: ${dados.dataLimpezaReservatorio || 'Não detectada'}. Mês OK: ${resDataOk ? 'Sim' : 'Não'}. Anexo citado: ${resAnexo ? 'Sim' : 'Não'}.`,
+    status: (resValida && resAnexo) ? "ok" : "atencao",
+    detalhe: `Data: ${dados.dataLimpezaReservatorio || 'Não detectada'}. Validade 4 meses: ${resValida ? 'OK' : 'Vencida'}. Anexo citado: ${resAnexo ? 'Sim' : 'Não'}.`,
     origem: "regra"
   });
 
-  // 6. TI e Wi-Fi
+  // 5. TI e Wi-Fi
   const temTI = texto.includes("wi-fi") || texto.includes("internet") || texto.includes("link");
   itens.push({
-    id: "ti", titulo: "Disponibilidade TI e Wi-Fi",
+    id: "ti", titulo: "Disponibilidade de TI e Wi-Fi",
     status: temTI ? "ok" : "atencao",
-    detalhe: temTI ? "Sistemas de conectividade citados." : "Informações de TI não localizadas.",
+    detalhe: temTI ? "Sistemas de conectividade e Wi-Fi citados." : "Informações de TI/Wi-Fi não localizadas.",
     origem: "regra"
   });
 
-  // 7. Câmeras (CFTV)
+  // 6. Câmeras (CFTV)
   const temCftv = texto.includes("cftv") || texto.includes("câmeras") || texto.includes("monitoramento");
   itens.push({
-    id: "cftv", titulo: "Disponibilidade de Câmeras",
+    id: "cftv", titulo: "Sistema de Câmeras (CFTV)",
     status: temCftv ? "ok" : "atencao",
-    detalhe: temCftv ? "Sistema de monitoramento citado." : "Não há menção ao estado das câmeras.",
+    detalhe: temCftv ? "Menção ao funcionamento das câmeras identificada." : "Dados de monitoramento não localizados.",
     origem: "regra"
   });
 
-  // 8. Sistema de Chamados
-  const temChamados = texto.includes("chamados") || texto.includes("manusis") || texto.includes("solicitações");
+  // 7. Sistema de Chamados
+  const temChamados = texto.includes("chamados") || texto.includes("manusis") || (dados.totalChamados !== null);
   itens.push({
     id: "chamados", titulo: "Sistema de Chamados",
     status: temChamados ? "ok" : "atencao",
@@ -102,21 +98,21 @@ export function rodarChecagensAutomaticas(dados: any, textoBruto: string): Check
     origem: "regra"
   });
 
-  // 9. Regularidade Fiscal e Trabalhista
+  // 8. Regularidade Fiscal e Trabalhista (Mês Correto)
   const fiscalOk = (texto.includes("fgts") || texto.includes("inss") || texto.includes("trabalhista")) && texto.includes(nomeMesAlvo);
   itens.push({
-    id: "fiscal", titulo: "Regularidade Fiscal",
+    id: "fiscal", titulo: "Regularidade Fiscal e Trabalhista",
     status: fiscalOk ? "ok" : "atencao",
-    detalhe: fiscalOk ? `Certidões de ${nomeMesAlvo} identificadas.` : `Não foi encontrada menção a encargos de ${nomeMesAlvo}.`,
+    detalhe: fiscalOk ? `Certidões e encargos de ${nomeMesAlvo} identificados.` : `Não foi encontrada menção a encargos do mês de ${nomeMesAlvo}.`,
     origem: "regra"
   });
 
-  // 10. Licença Sanitária
+  // 9. Licença Sanitária (Menção + Anexo)
   const temSanit = texto.includes("sanitária") || texto.includes("vigilância") || texto.includes("lva");
   itens.push({
     id: "sanit", titulo: "Licença Sanitária",
     status: temSanit ? "ok" : "atencao",
-    detalhe: temSanit ? "Licença Sanitária citada (verificar anexo final)." : "Não foi encontrada menção à Licença Sanitária.",
+    detalhe: temSanit ? "Licença Sanitária citada (verificar validade no anexo final)." : "Não foi identificada menção à Licença Sanitária.",
     origem: "regra"
   });
 
