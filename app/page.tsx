@@ -74,7 +74,15 @@ export default function Home() {
               disabled={!arquivo || analisando}
               className={`w-full mt-8 py-3 rounded-lg font-bold text-lg flex items-center justify-center gap-2 ${!arquivo || analisando ? "bg-gray-200 text-gray-400" : "bg-green-600 text-white hover:bg-green-700"}`}
             >
-              {analisando ? <><Loader2 className="w-5 h-5 animate-spin" /> Analisando...</> : <><FileText className="w-5 h-5" /> Iniciar Análise</>}
+              {analisando ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" /> Analisando...
+                </>
+              ) : (
+                <>
+                  <FileText className="w-5 h-5" /> Iniciar Análise
+                </>
+              )}
             </button>
           </div>
         ) : (
