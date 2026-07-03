@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ResultadoAnalise } from "@/components/ResultadoAnalise";
+import ResultadoAnalise from "@/components/ResultadoAnalise";
 import { AnalysisResult } from "@/lib/types";
 
 export default function Home() {
@@ -53,17 +53,17 @@ export default function Home() {
         {!resultado ? (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
             <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-12 hover:border-blue-400 transition-colors">
-              <span className="text-5xl mb-4">📄</span>
+              <span className="text-5xl mb-4" role="img" aria-label="ícone de documento">📄</span>
               <p className="text-lg font-medium text-gray-700">{arquivo ? arquivo.name : "Selecione o PDF do Relatório"}</p>
               <input type="file" accept=".pdf" className="hidden" id="file-upload" onChange={handleFileChange} disabled={analisando} />
-              <label htmlFor="file-upload" className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg font-medium cursor-pointer hover:bg-blue-700">
+              <label htmlFor="file-upload" className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg font-medium cursor-pointer hover:bg-blue-700 transition-all active:scale-95">
                 Selecionar Arquivo
               </label>
             </div>
 
             {erro && (
               <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                <strong>Erro:</strong> {erro}
+                <strong>Atenção:</strong> {erro}
               </div>
             )}
 
@@ -71,7 +71,7 @@ export default function Home() {
               onClick={analisarRelatorio}
               disabled={!arquivo || analisando}
               className={`w-full mt-8 py-3 rounded-lg font-bold text-lg transition-all ${
-                !arquivo || analisando ? "bg-gray-200 text-gray-400" : "bg-green-600 text-white hover:bg-green-700"
+                !arquivo || analisando ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-green-600 text-white hover:bg-green-700 active:scale-[0.98]"
               }`}
             >
               {analisando ? "⌛ Analisando Relatório..." : "🚀 Iniciar Análise"}
@@ -80,7 +80,7 @@ export default function Home() {
         ) : (
           <div className="space-y-6">
             <button onClick={resetar} className="text-blue-600 font-medium hover:underline flex items-center gap-2">
-              🔄 Analisar outro arquivo
+              <span>🔄</span> Analisar outro arquivo
             </button>
             <ResultadoAnalise resultado={resultado} />
           </div>
