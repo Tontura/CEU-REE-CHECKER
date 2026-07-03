@@ -1,4 +1,40 @@
-import { OPS, getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";import { OPS, getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjsays[p] >= media ? "1" : "0";
+import { OPS, getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
+import path from "path";
+import { ImageFingerprint } from "./types";
+
+if (typeof window === "undefined") {
+  GlobalWorkerOptions.workerSrc = path.join(
+    process.cwd(),
+    "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"
+  );
+}
+
+function calcularAverageHash(
+  data: Uint8ClampedArray | Uint8Array,
+  width: number,
+  height: number,
+  canais: number
+): string {
+  const totalPixels = width * height;
+  const grays: number[] = new Array(totalPixels);
+
+  for (let p = 0; p < totalPixels; p++) {
+    const offset = p * canais;
+
+    const r = data[offset] ?? 0;
+    const g = data[offset + 1] ?? 0;
+    const b = data[offset + 2] ?? 0;
+
+    grays[p] = (r + g + b) / 3;
+  }
+
+  const media =
+    grays.reduce((acc, v) => acc + v, 0) / grays.length;
+
+  let hash = "";
+
+  for (let p = 0; p < grays.length; p++) {
+    hash += grays[p] >= media ? "1" : "0";
   }
 
   return hash;
@@ -42,7 +78,6 @@ export async function extrairFingerprintsImagens(
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       try {
         const page = await pdf.getPage(pageNum);
-
         const opList = await page.getOperatorList();
 
         for (let i = 0; i < opList.fnArray.length; i++) {
@@ -156,39 +191,3 @@ export function compararFingerprints(
     ),
   };
 }
-import path from "path";
-import { ImageFingerprint } from "./types";
-
-if (typeof window === "undefined") {
-  GlobalWorkerOptions.workerSrc = path.join(
-    process.cwd(),
-    "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"
-  );
-}
-
-function calcularAverageHash(
-  data: Uint8ClampedArray | Uint8Array,
-  width: number,
-  height: number,
-  canais: number
-): string {
-  const totalPixels = width * height;
-
-  const grays: number[] = new Array(totalPixels);
-
-  for (let p = 0; p < totalPixels; p++) {
-    const offset = p * canais;
-
-    const r = data[offset] ?? 0;
-    const g = data[offset + 1] ?? 0;
-    const b = data[offset + 2] ?? 0;
-
-    grays[p] = (r + g + b) / 3;
-  }
-
-  const media =
-    grays.reduce((acc, v) => acc + v, 0) / grays.length;
-
-  let hash = "";
-
-  for (let p = 0; p < grays.length; p++) {
