@@ -11,18 +11,18 @@ export function rodarChecagensAutomaticas(
   if (fingerprintsAtual && fingerprintsAtual.length > 0) {
     itens.push({
       id: "fotos_presenca",
-      item: "Fotos no relatório",
+      titulo: "Fotos no relatório",
       status: "ok",
-      observacao: `O relatório contém ${fingerprintsAtual.length} imagens/fotos registradas.`,
-      categoria: "Regra automática"
+      detalhe: `O relatório contém ${fingerprintsAtual.length} imagens/fotos registradas.`,
+      origem: "regra"
     });
   } else {
     itens.push({
       id: "fotos_presenca",
-      item: "Fotos no relatório",
+      titulo: "Fotos no relatório",
       status: "atencao",
-      observacao: "Não foram detectadas fotos neste relatório.",
-      categoria: "Regra automática"
+      detalhe: "Não foram detectadas fotos neste relatório.",
+      origem: "regra"
     });
   }
 
@@ -35,26 +35,26 @@ export function rodarChecagensAutomaticas(
   if (temData) {
     itens.push({
       id: "licenca_sanitaria",
-      item: "Licença Sanitária",
+      titulo: "Licença Sanitária",
       status: "ok",
-      observacao: `Licença identificada com validade até ${dados.validadeLicencaSanitaria}.`,
-      categoria: "Regra automática"
+      detalhe: `Licença identificada com validade até ${dados.validadeLicencaSanitaria}.`,
+      origem: "regra"
     });
   } else if (citouAnexo) {
     itens.push({
       id: "licenca_sanitaria",
-      item: "Licença Sanitária",
+      titulo: "Licença Sanitária",
       status: "ok",
-      observacao: "Licença Sanitária citada nos anexos do relatório.",
-      categoria: "Regra automática"
+      detalhe: "Licença Sanitária citada nos anexos do relatório.",
+      origem: "regra"
     });
   } else {
     itens.push({
       id: "licenca_sanitaria",
-      item: "Licença Sanitária",
+      titulo: "Licença Sanitária",
       status: "atencao",
-      observacao: "Não foi possível confirmar a presença ou validade da Licença Sanitária.",
-      categoria: "Regra automática"
+      detalhe: "Não foi possível confirmar a presença ou validade da Licença Sanitária.",
+      origem: "regra"
     });
   }
 
@@ -62,10 +62,10 @@ export function rodarChecagensAutomaticas(
   if (dados.dataControlePragas) {
     itens.push({
       id: "pragas",
-      item: "Controle de Pragas",
+      titulo: "Controle de Pragas",
       status: "ok",
-      observacao: `Realizado em: ${dados.dataControlePragas}.`,
-      categoria: "Regra automática"
+      detalhe: `Realizado em: ${dados.dataControlePragas}.`,
+      origem: "regra"
     });
   }
 
@@ -73,10 +73,10 @@ export function rodarChecagensAutomaticas(
   if (dados.dataLimpezaReservatorio) {
     itens.push({
       id: "reservatorio",
-      item: "Limpeza de Reservatório",
+      titulo: "Limpeza de Reservatório",
       status: "ok",
-      observacao: `Realizada em: ${dados.dataLimpezaReservatorio}.`,
-      categoria: "Regra automática"
+      detalhe: `Realizada em: ${dados.dataLimpezaReservatorio}.`,
+      origem: "regra"
     });
   }
 
